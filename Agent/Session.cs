@@ -1,4 +1,5 @@
 using OpenAI.Models.Chat;
+using Pandora.Agent.Tools;
 using Pandora.Event;
 using Pandora.Interfaces;
 using Pandora.Models;
@@ -28,8 +29,12 @@ namespace Pandora.Agent
         public long CreatedTime { get; private set; }
 
         public long UpdatedTime {  get; private set; }
+
+        public FileState TextFileState { get; private set; }
+
         public Session(ICore core, string sessionId, WorkMode workMode)
         {
+            TextFileState = new FileState(this);
             Core = core;
             SessionId = sessionId;
             WorkMode = workMode;
@@ -43,7 +48,10 @@ namespace Pandora.Agent
             AiService.LoadDefaultModel();
             MessageManager = new MessageManager(this);
         }
-
+        private void EndTask()
+        {
+            _=TextFileState.FindcChangedFiles();
+        }
         public async Task CompleteChat(CompleteChatOptions options, CancellationToken cancellationToken)
         {
             uint toolUse = 0;
@@ -125,6 +133,7 @@ namespace Pandora.Agent
                     }
                 }
             }
+            EndTask();
         }
         public (MessageContent? ret, ToolsResult retSatus) ToolUse(string toolName, string parameters)
         {

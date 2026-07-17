@@ -1,3 +1,4 @@
+using Pandora.Interfaces;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
@@ -127,6 +128,10 @@ namespace Pandora.Agent
 
     public class Utils
     {
+        public static string GetFullPath(string spath,IAgentEnvironment agentEnvironment)
+        {
+            return Path.GetFullPath(Path.Combine(agentEnvironment.WorkingDirectory, spath)); ;
+        }
         public static string GetSubstringBetween(string str, string start, string end)
         {
             int startIndex = str.IndexOf(start);

@@ -203,10 +203,14 @@ namespace Pandora.WebSocket.Handler
 
             // 添加用户消息
             var content = msg.Content ?? "";
+            string GetChangedFilesStr = session.TextFileState.GetChangedFilesStr();
             var infoPrefix = $@"<information>
 [APP]Pandora Web Client
 [TimeNow]{DateTime.Now:yyyy-MM-dd HH:mm:ss}
 </information>
+<fileChange>
+{GetChangedFilesStr}
+</fileChange>
 <user>
 {content}
 </user>";

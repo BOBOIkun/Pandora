@@ -3,12 +3,17 @@ using Pandora.Interfaces;
 using Pandora.Models;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
 
 namespace Pandora.Agent.Tools
 {
     public class ReadFileT : IAgentTool
-       {
+    {
+        public const int MAX_IMAGE_FILE_SIZE = 3 * 1024 * 1024;
+        public const int MAX_TEXT_LENGTH = 30000;
+        public FileState fileState = null!;
+
         public AgentTool GetToolDefinition(ISession session)
         {
             return new AgentTool()
@@ -21,7 +26,7 @@ namespace Pandora.Agent.Tools
                 Parameters = [
                     new() { Name = "path",      Type = AgentParametersType.STRING, Description = "Absolute path to the file", Required = true },
                     new() { Name = "startLine", Type = AgentParametersType.INT,    Description = "Start line number (1-based, optional)", Required = false },
-                    new() { Name = "endLine",   Type = AgentParametersType.INT,    Description = "End line number (1-based, optional)", Required = false },
+                    new() { Name = "endLine",   Type = AgentParametersType.INT,    Description = "End line number (1-based, optional). Omit endLine to read to the end of the file.", Required = false },
                 ],
                 FullLoad = true,
                 ParametersTypeCheck = true,
@@ -33,44 +38,74 @@ namespace Pandora.Agent.Tools
 
         public void Init(ISession session)
         {
-            return;
+            fileState = session.TextFileState;
         }
+
         private (MessageContent? ret, ToolsResult retSatus) Execute(ISession session, AgentToolParameterValue param)
         {
-            string path = param.GetString("path");
+            if (fileState == null)
+                return (new MessageContent("FileState not initialized"), ToolsResult.UnKnownError);
+
+            string? path = param.GetString("path");
+            if (string.IsNullOrEmpty(path))
+                return (new MessageContent("Invalid path"), ToolsResult.ParametersError);
+
             if (!File.Exists(path))
                 return (new MessageContent($"File not found: {path}"), ToolsResult.ParametersError);
 
-            var ext = Path.GetExtension(path);
-
             if (!session.SafetyManager.GetFileAccessInfo(path).read)
                 return (new MessageContent($"Access denied: {path}"), ToolsResult.ParametersError);
+
+            var ext = Path.GetExtension(path);
             if (ImageExtensions.Contains(ext))
-            {
                 return ReadImage(session, path);
-            }
-            bool hasRange = param.Has("startLine") || param.Has("endLine");
-            if (hasRange)
+
+            bool hasStart = param.Has("startLine");
+            bool hasEnd = param.Has("endLine");
+
+            int actualStart, actualEnd;
+            if (!hasStart && !hasEnd)
             {
-                int startLine = Math.Max(1, param.Has("startLine") ? param.GetInt("startLine") : 1);
-                int endLine = param.Has("endLine") ? param.GetInt("endLine") : int.MaxValue;
-                if (endLine - startLine > 100)
-                    return (new MessageContent($"Line range too large ({endLine - startLine + 1}), max 100 lines"), ToolsResult.ParametersError);
-                return ReadTextRange(path, startLine, endLine);
+                actualStart = -1;
+                actualEnd = -1;
+            }
+            else
+            {
+                actualStart = hasStart ? Math.Max(1, param.GetInt("startLine")) : 1;
+                actualEnd = hasEnd ? param.GetInt("endLine") : int.MaxValue;
+                if (hasEnd && actualEnd - actualStart + 1 > 100)
+                    return (new MessageContent($"Line range too large ({actualEnd - actualStart + 1} lines), max 100 lines"), ToolsResult.ParametersError);
             }
 
-            return ReadFullText(path);
+            FileStateStatus status = fileState.GetStatus(path, actualStart, actualEnd);
+            if (status == FileStateStatus.NotChanged)
+                return (new MessageContent("File has already been read and has not changed."), ToolsResult.Success);
+
+            (MessageContent? ret, ToolsResult result) readResult;
+            if (actualStart == -1)
+                readResult = ReadFullText(path);
+            else
+                readResult = ReadTextRange(path, actualStart, actualEnd);
+
+            if (readResult.result == ToolsResult.Success)
+                fileState.Update(path, actualStart, actualEnd);
+
+            return readResult;
         }
 
         private static (MessageContent?, ToolsResult) ReadImage(ISession session, string path)
         {
             try
             {
-                if (new FileInfo(path).Length > 5 * 1024 * 1024)
-                    return (new MessageContent($"File size too large ({new FileInfo(path).Length / 1024 / 1024}MB), max 5MB"), ToolsResult.ParametersError);
-                List<ContentPart> parts = [];
-                parts.Add(new TextContentPart($"Read file: {path}"));
-                parts.Add(ImageContentPart.FromFile(path));
+                long fileSize = new FileInfo(path).Length;
+                if (fileSize > MAX_IMAGE_FILE_SIZE)
+                    return (new MessageContent($"File size too large ({fileSize / 1024 / 1024}MB), max {MAX_IMAGE_FILE_SIZE / 1024 / 1024}MB"), ToolsResult.ParametersError);
+
+                List<ContentPart> parts = new()
+                {
+                    new TextContentPart($"Read file: {path}"),
+                    ImageContentPart.FromFile(path)
+                };
                 return (new MessageContent(parts), ToolsResult.Success);
             }
             catch (Exception ex)
@@ -83,7 +118,7 @@ namespace Pandora.Agent.Tools
         {
             try
             {
-                var resultLines = new List<string>();
+                var sb = new StringBuilder();
                 int currentLine = 0;
 
                 using var reader = new StreamReader(path);
@@ -91,16 +126,16 @@ namespace Pandora.Agent.Tools
                 {
                     currentLine++;
                     if (currentLine >= startLine && currentLine <= endLine)
-                        resultLines.Add(line);
-                    if (currentLine > endLine) break;
+                        sb.AppendLine($"{currentLine,6}\t{line}");
+                    if (currentLine > endLine)
+                        break;
                 }
 
-                if (resultLines.Count == 0)
-                    return (new MessageContent($"File has fewer than {endLine} lines (total: {currentLine})"), ToolsResult.ParametersError);
-                var ret= string.Join("\n", resultLines);
-                if (ret.Length > 30000)
-                    return (new MessageContent($"Text content too large ({ret.Length} chars), max 30000 chars"), ToolsResult.ParametersError);
-                return (new MessageContent(ret), ToolsResult.Success);
+                string result = sb.ToString();
+                if (result.Length > MAX_TEXT_LENGTH)
+                    return (new MessageContent($"Text content too large ({result.Length} chars), max {MAX_TEXT_LENGTH} chars"), ToolsResult.ParametersError);
+
+                return (new MessageContent(result), ToolsResult.Success);
             }
             catch (Exception ex)
             {
@@ -112,7 +147,10 @@ namespace Pandora.Agent.Tools
         {
             try
             {
-                string content = File.ReadAllText(path);
+                string content = ReadAllTextWithLineNumbers(path);
+                if (content.Length > MAX_TEXT_LENGTH)
+                    return (new MessageContent($"Text content too large ({content.Length} chars), max {MAX_TEXT_LENGTH} chars"), ToolsResult.ParametersError);
+
                 return (new MessageContent(content), ToolsResult.Success);
             }
             catch (Exception ex)
@@ -120,9 +158,24 @@ namespace Pandora.Agent.Tools
                 return (new MessageContent($"Read error: {ex.Message}"), ToolsResult.UnKnownError);
             }
         }
+
+        private static string ReadAllTextWithLineNumbers(string path, Encoding? encoding = null)
+        {
+            encoding ??= Encoding.UTF8;
+            var sb = new StringBuilder();
+            using var reader = new StreamReader(path, encoding);
+            int lineNumber = 0;
+            while (reader.ReadLine() is { } line)
+            {
+                lineNumber++;
+                sb.AppendLine($"{lineNumber,6}\t{line}");
+            }
+            return sb.ToString();
+        }
+
         private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
         {
-            ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".ico", ".tiff", ".tif", ".svg"
+            ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".ico", ".tiff", ".tif"
         };
     }
 }

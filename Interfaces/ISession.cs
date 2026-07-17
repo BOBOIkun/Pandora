@@ -1,4 +1,5 @@
 ﻿using Pandora.Agent;
+using Pandora.Agent.Tools;
 using Pandora.Event;
 using System;
 using System.Collections.Generic;
@@ -21,6 +22,7 @@ namespace Pandora.Interfaces
         public ISafetyManager SafetyManager { get;}
         public IAgentEnvironment AgentEnvironment { get;}
         public IAiService AiService { get;}
+        public FileState TextFileState { get; }
         public Task CompleteChat(CompleteChatOptions options, CancellationToken cancellationToken);
         public Task<string> CreateSessionTitle(string prompt);
     }
