@@ -30,6 +30,18 @@ namespace Pandora.Agent.Tools
             }
             return str;
         }
+        public void FileChangeCheck(string path)
+        {
+            if (!File.Exists(path))
+            {
+                _changedFiles[path] = ChangeType.Deleted;
+                return;
+            }
+            if (File.GetLastWriteTime(path).ToFileTimeUtc() != _fileState[path].versionTimeStamp)
+            {
+                _changedFiles[path] = ChangeType.Modified;
+            }
+        }
         public FileState(ISession session,bool autoFind = false)
         { 
             _session = session;
@@ -50,19 +62,11 @@ namespace Pandora.Agent.Tools
         {
             foreach (var file in _fileState)
             {
-                if (!File.Exists(file.Key))
-                {
-                    _changedFiles[file.Key]= ChangeType.Deleted;
-                    continue;
-                }
-                if (File.GetLastWriteTime(file.Key).ToFileTimeUtc() != file.Value.versionTimeStamp)
-                {
-                    _changedFiles[file.Key] = ChangeType.Modified;
-                }
+                FileChangeCheck(file.Key);
             }
         }
 
-        public FileStateStatus GetStatus(string path, int startLine = -1, int endLine = -1)
+        public FileStateStatus GetStatus(string path, bool lineCheck, int startLine = -1, int endLine = -1)
         {
             string full = Utils.GetFullPath(path, _session.AgentEnvironment);
             var fileLock = _locks.GetOrAdd(full, _ => new object());
@@ -75,10 +79,10 @@ namespace Pandora.Agent.Tools
                     long currentTs = File.GetLastWriteTime(full).ToFileTimeUtc();
                     if (info.versionTimeStamp != currentTs)
                         return FileStateStatus.Changed;
-
+                    if(!lineCheck)
+                        return FileStateStatus.NotChanged;
                     if (info.lines == null)
                         return FileStateStatus.NotChanged;
-
                     List<FileLine> linesCopy = new List<FileLine>(info.lines);
                     Merge(linesCopy);
                     int index = linesCopy.Count <= 20

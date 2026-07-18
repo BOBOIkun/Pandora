@@ -77,7 +77,7 @@ namespace Pandora.Agent.Tools
                     return (new MessageContent($"Line range too large ({actualEnd - actualStart + 1} lines), max 100 lines"), ToolsResult.ParametersError);
             }
 
-            FileStateStatus status = fileState.GetStatus(path, actualStart, actualEnd);
+            FileStateStatus status = fileState.GetStatus(path, true,actualStart, actualEnd);
             if (status == FileStateStatus.NotChanged)
                 return (new MessageContent("File has already been read and has not changed."), ToolsResult.Success);
 
