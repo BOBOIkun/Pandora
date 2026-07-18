@@ -8,12 +8,13 @@ using System.Threading.Tasks;
 
 namespace Pandora.Agent.Tools
 {
-    public class FileState(ISession session)
+    public class FileState:IDisposable
     {
         private readonly ConcurrentDictionary<string, ChangeType> _changedFiles = new();
-        private readonly ISession _session = session;
+        private readonly ISession _session;
         private readonly ConcurrentDictionary<string, FileStateInfo> _fileState = new();
         private readonly ConcurrentDictionary<string, object> _locks = new();
+        private bool _autoTaskRun=false;
 
         public string GetChangedFilesStr(bool clear = false)
         {
@@ -29,12 +30,27 @@ namespace Pandora.Agent.Tools
             }
             return str;
         }
-
+        public FileState(ISession session,bool autoFind = false)
+        { 
+            _session = session;
+            if (autoFind)
+            {
+                _autoTaskRun = true;
+                Task.Run(async () =>
+                {
+                    while (_autoTaskRun)
+                    {
+                        await Task.Delay(10000);
+                        await FindcChangedFiles();
+                    }
+                });
+            }
+        }
         public async Task FindcChangedFiles()
         {
             foreach (var file in _fileState)
             {
-                if (File.Exists(file.Key))
+                if (!File.Exists(file.Key))
                 {
                     _changedFiles[file.Key]= ChangeType.Deleted;
                     continue;
@@ -177,6 +193,11 @@ namespace Pandora.Agent.Tools
                 }
             }
             lst.RemoveRange(slow + 1, lst.Count - slow - 1);
+        }
+
+        public void Dispose()
+        {
+            _autoTaskRun = false;
         }
     }
 

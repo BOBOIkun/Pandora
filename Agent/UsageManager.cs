@@ -20,7 +20,7 @@ namespace Pandora.Agent
         public void Accumulate(Usage? usage)
         {
             if (usage == null) return;
-            TotalTokens = usage.TotalTokens;
+            TotalTokens += usage.TotalTokens;
             PromptTokens += usage.PromptTokens;
             CompletionTokens += usage.CompletionTokens;
             CachedTokens += usage.PromptTokensDetails?.CachedTokens ?? 0;

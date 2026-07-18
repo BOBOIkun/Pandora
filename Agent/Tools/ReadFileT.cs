@@ -73,7 +73,7 @@ namespace Pandora.Agent.Tools
             {
                 actualStart = hasStart ? Math.Max(1, param.GetInt("startLine")) : 1;
                 actualEnd = hasEnd ? param.GetInt("endLine") : int.MaxValue;
-                if (hasEnd && actualEnd - actualStart + 1 > 100)
+                if (hasEnd && actualEnd - actualStart > 100)
                     return (new MessageContent($"Line range too large ({actualEnd - actualStart + 1} lines), max 100 lines"), ToolsResult.ParametersError);
             }
 

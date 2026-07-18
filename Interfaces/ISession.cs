@@ -38,6 +38,6 @@ namespace Pandora.Interfaces
     public class CompleteChatOptions
     {
         public uint MaxToolsUse { get; set; } = 9999;
-        public uint MaxToolError { get; set; } = 3;
+        public uint MaxToolError { get; set; } = 999;
     }
 }
