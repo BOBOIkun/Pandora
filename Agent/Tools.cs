@@ -132,15 +132,15 @@ namespace Pandora.Agent
         {
             return Path.GetFullPath(Path.Combine(agentEnvironment.WorkingDirectory, spath)); ;
         }
-        public static string GetSubstringBetween(string str, string start, string end)
+        public static string GetSubstringBetween(string str, string start, string end,string empty="")
         {
             int startIndex = str.IndexOf(start);
             if (startIndex == -1)
-                return string.Empty;
+                return empty;
             startIndex += start.Length;
             int endIndex = str.IndexOf(end, startIndex);
             if (endIndex == -1)
-                return string.Empty;
+                return empty;
             return str[startIndex..endIndex];
         }
         public static StringBuilder GetSystemInfoStrB()

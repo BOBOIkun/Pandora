@@ -32,6 +32,8 @@ namespace Pandora.Agent
 
         public FileState TextFileState { get; private set; }
 
+        public bool IsSubAgent { get; set; } = false;
+
         public Session(ICore core, string sessionId, WorkMode workMode)
         {
             TextFileState = new FileState(this);
@@ -94,42 +96,37 @@ namespace Pandora.Agent
                     break;
                 for (int i = 0; i < ret.ToolsCalls.Count; i++)
                 {
-                    while (true)
-                    {
-                        if (toolError >= options.MaxToolError)
-                            throw new PandoraException("Too Many Tools Error");
+                    if (toolError >= options.MaxToolError)
+                        throw new PandoraException("Too Many Tools Error");
 
-                        if (toolUse >= options.MaxToolsUse)
-                            throw new PandoraException("Too Many Tools Use");
-                        var toolCall = ToolUse(ret.ToolsCalls[i].ToolName, ret.ToolsCalls[i].Parameters);
-                        bool success = toolCall.retSatus == ToolsResult.Success;
-                        EventBus.Publish(new ToolCallEndEvent
-                        {
-                            SessionId = SessionId,
-                            MessageId = messageId,
-                            ToolCallId = ret.ToolsCalls[i].ToolCallId,
-                            ToolName = ret.ToolsCalls[i].ToolName,
-                            Arguments = ret.ToolsCalls[i].Parameters,
-                            Result = toolCall.ret?.Text ?? "",
-                            Success = success
-                        });
-                        if (success)
-                        {
-                            toolUse++;
-                            toolError = 0;
-                            MessageManager.AddToolCall(ret.ToolsCalls[i].ToolCallId, toolCall.ret);
-                            break;
-                        }
-                        else if (toolCall.retSatus == ToolsResult.ParametersError)
-                        {
-                            toolError++;
-                            MessageManager.AddToolCall(ret.ToolsCalls[i].ToolCallId, toolCall.ret);
-                            continue;
-                        }
-                        else if (toolCall.retSatus == ToolsResult.UnKnownError)
-                        {
-                            throw new Exception("Tool Use Error");
-                        }
+                    if (toolUse >= options.MaxToolsUse)
+                        throw new PandoraException("Too Many Tools Use");
+                    var toolCall = ToolUse(ret.ToolsCalls[i].ToolName, ret.ToolsCalls[i].Parameters);
+                    bool success = toolCall.retSatus == ToolsResult.Success;
+                    EventBus.Publish(new ToolCallEndEvent
+                    {
+                        SessionId = SessionId,
+                        MessageId = messageId,
+                        ToolCallId = ret.ToolsCalls[i].ToolCallId,
+                        ToolName = ret.ToolsCalls[i].ToolName,
+                        Arguments = ret.ToolsCalls[i].Parameters,
+                        Result = toolCall.ret?.Text ?? "",
+                        Success = success
+                    });
+                    if (success)
+                    {
+                        toolUse++;
+                        toolError = 0;
+                        MessageManager.AddToolCall(ret.ToolsCalls[i].ToolCallId, toolCall.ret);
+                    }
+                    else if (toolCall.retSatus == ToolsResult.ParametersError)
+                    {
+                        toolError++;
+                        MessageManager.AddToolCall(ret.ToolsCalls[i].ToolCallId, toolCall.ret);
+                    }
+                    else if (toolCall.retSatus == ToolsResult.UnKnownError)
+                    {
+                        throw new Exception("Tool Use Error");
                     }
                 }
             }

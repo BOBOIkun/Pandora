@@ -1,4 +1,5 @@
 using Pandora.Agent;
+using Pandora.Agent.Tools;
 using Pandora.WebSocket.Handler;
 using Pandora.WebSocket.Server;
 

@@ -9,6 +9,7 @@ namespace Pandora.Interfaces
 {
     public interface ISession
     {
+        public bool IsSubAgent { get; }
         public long CreatedTime { get;}
         public long UpdatedTime { get;}
         public string SessionId { get;}

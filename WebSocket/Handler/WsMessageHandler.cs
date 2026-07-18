@@ -337,7 +337,7 @@ namespace Pandora.WebSocket.Handler
                     }
                     else
                     {
-                        hm.Content = Utils.GetSubstringBetween(hm.Content ?? "", "<user>", "</user>");
+                        hm.Content = Utils.GetSubstringBetween(hm.Content ?? "", "<user>", "</user>", hm.Content ?? "");
                     }
                 }
                 if (m.Role == "assistant")

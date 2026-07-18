@@ -120,25 +120,14 @@ namespace Pandora.Models
                     // 按声明的类型转换，System.Text.Json 默认不自动将数字转 int/float
                     try
                     {
-                        switch (p.Type)
+                        obj = p.Type switch
                         {
-                            case AgentParametersType.STRING:
-                                obj = value.ToString();
-                                break;
-                            case AgentParametersType.INT:
-                                obj = value.GetValue<int>();
-                                break;
-                            case AgentParametersType.FLOAT:
-                                obj = value.GetValue<float>();
-                                break;
-                            case AgentParametersType.BOOL:
-                                obj = value.GetValue<bool>();
-                                break;
-                            default:
-                                // 回退：直接用 CLR 类型
-                                obj = value.GetValue<JsonNode?>();
-                                break;
-                        }
+                            AgentParametersType.STRING => value.ToString(),
+                            AgentParametersType.INT => value.GetValue<int>(),
+                            AgentParametersType.FLOAT => value.GetValue<float>(),
+                            AgentParametersType.BOOL => (object)value.GetValue<bool>(),
+                            _ => value.GetValue<JsonNode?>(),// 回退：直接用 CLR 类型
+                        };
                     }
                     catch
                     {
