@@ -7,6 +7,7 @@ namespace Pandora.Agent
         public string Model { get; set; } = "";
         public int? ContextSize { get; set; }
         public string Type { get; set; } = "chat"; // "chat" | "asr"
+        public List<string> InputModalities { get; set; } = new(); // "text" | "image" | "audio" | "video"
     }
 
     /// <summary>供应商完整配置（对应 config/provider/xxx.json）</summary>

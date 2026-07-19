@@ -1,4 +1,6 @@
+using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using OpenAI.Models.Chat;
 using Pandora.Agent;
 using Pandora.Interfaces;
@@ -77,6 +79,10 @@ namespace Pandora.WebSocket.Handler
                     case "save_default_models": await HandleSaveDefaultModels(msg, conn); break;
                     case "switch_model": await HandleSwitchModel(msg, conn); break;
                     case "audio_input": await HandleAudioInput(msg, conn); break;
+                    case "set_workspace": await HandleSetWorkspace(msg, conn); break;
+                    case "list_directory": await HandleListDirectory(msg, conn); break;
+                    case "get_common_folders": await HandleGetCommonFolders(msg, conn); break;
+                    case "search_models": await HandleSearchModels(msg, conn); break;
                     default:
                         Console.WriteLine($"[WsMessageHandler] Unknown message type: {msg.Type}");
                         break;
@@ -103,13 +109,23 @@ namespace Pandora.WebSocket.Handler
             var session = _core.CreateSession(sessionId, mode);
             _connectionSessions[conn] = sessionId;
 
+            // 指定了工作区路径 → 设置
+            if (!string.IsNullOrEmpty(msg.Workspace))
+            {
+                try { session.AgentEnvironment.SetWorkingDirectory(msg.Workspace); }
+                catch (PandoraException) { /* 目录不存在则保持默认 */ }
+            }
+
             await conn.SendAsync(WsProtocol.Serialize(
                 WsProtocol.SessionCreated(sessionId, msg.Prompt ?? mode.ToString(), mode.ToString().ToLower())));
 
-            // 推送初始 usage 和 safety 状态
+            // 推送初始 usage、safety 状态和工作区
             await conn.SendAsync(WsProtocol.Serialize(
                 WsProtocol.SafetyModeChanged(sessionId,
                     session.SafetyManager.SafetyMode.ToString().ToLower())));
+
+            await conn.SendAsync(WsProtocol.Serialize(
+                WsProtocol.WorkspaceChanged(sessionId, session.AgentEnvironment.WorkingDirectory)));
 
             await PushUsage(session, conn);
         }
@@ -150,6 +166,181 @@ namespace Pandora.WebSocket.Handler
             await conn.SendAsync(WsProtocol.Serialize(
                 WsProtocol.SessionTitleChanged(sid, title)));
             await PushSessionList(conn);
+        }
+
+        private async Task HandleSetWorkspace(ClientMessage msg, WsConnection conn)
+        {
+            var sid = msg.SessionId;
+            var ws = msg.Workspace;
+            if (string.IsNullOrEmpty(sid) || string.IsNullOrEmpty(ws)) return;
+            if (!_core.Sessions.TryGetValue(sid, out var session)) return;
+
+            try
+            {
+                session.AgentEnvironment.SetWorkingDirectory(ws);
+                var newWs = session.AgentEnvironment.WorkingDirectory;
+                await conn.SendAsync(WsProtocol.Serialize(
+                    WsProtocol.WorkspaceChanged(sid, newWs)));
+                await PushSessionList(conn);
+            }
+            catch (PandoraException ex)
+            {
+                await conn.SendAsync(WsProtocol.Serialize(
+                    WsProtocol.Error(sid, ex.Message)));
+            }
+        }
+
+        private async Task HandleListDirectory(ClientMessage msg, WsConnection conn)
+        {
+            var path = msg.Path;
+            var requestId = msg.RequestId ?? "";
+
+            // 空路径 → 列出驱动器
+            if (string.IsNullOrEmpty(path))
+            {
+                var drives = DriveInfo.GetDrives()
+                    .Where(d => d.IsReady)
+                    .Select(d => new DirectoryEntry
+                    {
+                        Name = d.Name.TrimEnd('\\'),
+                        Path = d.RootDirectory.FullName,
+                        HasChildren = true
+                    }).ToArray();
+                await conn.SendAsync(WsProtocol.Serialize(
+                    WsProtocol.DirectoryList(requestId, "我的电脑", drives, null)));
+                return;
+            }
+
+            if (!Directory.Exists(path))
+            {
+                await conn.SendAsync(WsProtocol.Serialize(
+                    WsProtocol.Error(null, $"路径不存在: {path}")));
+                return;
+            }
+
+            var parentPath = Directory.GetParent(path)?.FullName;
+            var dirs = GetSafeDirectories(path)
+                .Select(d => new DirectoryEntry
+                {
+                    Name = Path.GetFileName(d),
+                    Path = d,
+                    HasChildren = HasSafeChildren(d)
+                })
+                .OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            await conn.SendAsync(WsProtocol.Serialize(
+                WsProtocol.DirectoryList(requestId, path, dirs, parentPath)));
+        }
+
+        private static string[] GetSafeDirectories(string path)
+        {
+            try { return Directory.GetDirectories(path); }
+            catch (UnauthorizedAccessException) { return []; }
+            catch (IOException) { return []; }
+            catch (System.Security.SecurityException) { return []; }
+        }
+
+        private static bool HasSafeChildren(string path)
+        {
+            try { return Directory.EnumerateDirectories(path).Any(); }
+            catch { return false; }
+        }
+
+        private async Task HandleGetCommonFolders(ClientMessage msg, WsConnection conn)
+        {
+            var folders = new[]
+            {
+                ("桌面", Environment.SpecialFolder.Desktop),
+                ("文档", Environment.SpecialFolder.MyDocuments),
+                ("下载", Environment.SpecialFolder.UserProfile),
+                ("图片", Environment.SpecialFolder.MyPictures),
+                ("音乐", Environment.SpecialFolder.MyMusic),
+                ("视频", Environment.SpecialFolder.MyVideos),
+                ("用户目录", Environment.SpecialFolder.UserProfile),
+            };
+
+            var entries = new List<DirectoryEntry>();
+            foreach (var (label, sf) in folders)
+            {
+                try
+                {
+                    var path = Environment.GetFolderPath(sf);
+                    if (sf == Environment.SpecialFolder.UserProfile && label == "下载")
+                        path = Path.Combine(path, "Downloads");
+
+                    if (!Directory.Exists(path)) continue;
+                    entries.Add(new DirectoryEntry
+                    {
+                        Name = label,
+                        Path = path,
+                        HasChildren = HasSafeChildren(path)
+                    });
+                }
+                catch { /* skip inaccessible */ }
+            }
+
+            // 去重（用户目录可能与其他重复）
+            var deduped = entries
+                .GroupBy(e => e.Path)
+                .Select(g => g.First())
+                .ToArray();
+
+            await conn.SendAsync(WsProtocol.Serialize(
+                WsProtocol.CommonFolders(deduped)));
+        }
+
+        // ============ 模型搜索 ============
+
+        private class RawModelEntry
+        {
+            [JsonPropertyName("id")] public string Id { get; set; } = "";
+            [JsonPropertyName("name")] public string Name { get; set; } = "";
+            [JsonPropertyName("input_modalities")] public List<string> InputModalities { get; set; } = new();
+            [JsonPropertyName("output_modalities")] public List<string> OutputModalities { get; set; } = new();
+            [JsonPropertyName("context_length")] public int ContextLength { get; set; }
+        }
+
+        private static List<RawModelEntry>? _modelCatalogCache;
+        private static readonly object _catalogLock = new();
+
+        private static List<RawModelEntry> LoadModelCatalog()
+        {
+            lock (_catalogLock)
+            {
+                if (_modelCatalogCache != null) return _modelCatalogCache;
+                var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config", "models.json");
+                if (!File.Exists(path)) { _modelCatalogCache = new(); return _modelCatalogCache; }
+                var json = File.ReadAllText(path);
+                var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                _modelCatalogCache = JsonSerializer.Deserialize<List<RawModelEntry>>(json, opts) ?? new();
+                return _modelCatalogCache;
+            }
+        }
+
+        private async Task HandleSearchModels(ClientMessage msg, WsConnection conn)
+        {
+            var keyword = (msg.Content ?? "").Trim().ToLowerInvariant();
+            var requestId = msg.RequestId ?? "";
+            var catalog = LoadModelCatalog();
+
+            var filtered = string.IsNullOrEmpty(keyword)
+                ? catalog
+                : catalog.Where(e =>
+                    e.Id.ToLowerInvariant().Contains(keyword) ||
+                    e.Name.ToLowerInvariant().Contains(keyword)).ToList();
+
+            var total = filtered.Count;
+            var results = filtered.Take(50).Select(e => new ModelSearchEntry
+            {
+                Id = e.Id,
+                Name = e.Name,
+                InputModalities = e.InputModalities,
+                ContextLength = e.ContextLength
+            }).ToArray();
+
+            await conn.SendAsync(WsProtocol.Serialize(
+                WsProtocol.ModelSearchResult(requestId, results, total)));
         }
 
         private async Task HandleSelectSession(ClientMessage msg, WsConnection conn)
@@ -203,14 +394,11 @@ namespace Pandora.WebSocket.Handler
 
             // 添加用户消息
             var content = msg.Content ?? "";
-            string GetChangedFilesStr = session.TextFileState.GetChangedFilesStr();
             var infoPrefix = $@"<information>
 [APP]Pandora Web Client
 [TimeNow]{DateTime.Now:yyyy-MM-dd HH:mm:ss}
 </information>
-<fileChange>
-{GetChangedFilesStr}
-</fileChange>
+{session.ChangeInfo}
 <user>
 {content}
 </user>";
@@ -440,7 +628,8 @@ namespace Pandora.WebSocket.Handler
                     Name = m.Name,
                     Model = m.Model,
                     ContextSize = m.ContextSize ?? 0,
-                    Type = m.Type
+                    Type = m.Type,
+                    InputModalities = m.InputModalities ?? new List<string>()
                 }).ToArray()
             }).ToArray();
 
@@ -614,6 +803,7 @@ namespace Pandora.WebSocket.Handler
                 SessionId = s.SessionId,
                 Prompt = s.WorkMode.ToString(),
                 Title = string.IsNullOrEmpty(s.Title) ? "新建对话" : s.Title,
+                Workspace = s.AgentEnvironment.WorkingDirectory,
                 MessageCount = s.MessageManager.GetMessages().Count
             }).ToArray();
 

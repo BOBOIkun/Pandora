@@ -45,6 +45,12 @@ namespace Pandora.WebSocket.Protocol
         [JsonPropertyName("workMode")]
         public string? WorkMode { get; set; }
 
+        [JsonPropertyName("workspace")]
+        public string? Workspace { get; set; }
+
+        [JsonPropertyName("path")]
+        public string? Path { get; set; }
+
         [JsonPropertyName("providerId")]
         public string? ProviderId { get; set; }
 
@@ -105,6 +111,37 @@ namespace Pandora.WebSocket.Protocol
         {
             type = "session_deleted",
             sessionId
+        };
+
+        public static object WorkspaceChanged(string sessionId, string workspace) => new
+        {
+            type = "workspace_changed",
+            sessionId,
+            workspace
+        };
+
+        public static object DirectoryList(string requestId, string currentPath,
+            DirectoryEntry[] entries, string? parentPath) => new
+        {
+            type = "directory_list",
+            requestId,
+            currentPath,
+            parentPath,
+            entries
+        };
+
+        public static object CommonFolders(DirectoryEntry[] entries) => new
+        {
+            type = "common_folders",
+            entries
+        };
+
+        public static object ModelSearchResult(string requestId, ModelSearchEntry[] entries, int total) => new
+        {
+            type = "model_search_result",
+            requestId,
+            entries,
+            total
         };
 
         public static object SessionList(SessionSummary[] sessions) => new
@@ -292,6 +329,18 @@ namespace Pandora.WebSocket.Protocol
 
     // ============ 辅助类型 ============
 
+    public class DirectoryEntry
+    {
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = "";
+
+        [JsonPropertyName("path")]
+        public string Path { get; set; } = "";
+
+        [JsonPropertyName("hasChildren")]
+        public bool HasChildren { get; set; }
+    }
+
     public class SessionSummary
     {
         [JsonPropertyName("sessionId")]
@@ -302,6 +351,9 @@ namespace Pandora.WebSocket.Protocol
 
         [JsonPropertyName("title")]
         public string Title { get; set; } = "";
+
+        [JsonPropertyName("workspace")]
+        public string Workspace { get; set; } = "";
 
         [JsonPropertyName("lastActive")]
         public string? LastActive { get; set; }
@@ -398,5 +450,23 @@ namespace Pandora.WebSocket.Protocol
 
         [JsonPropertyName("type")]
         public string Type { get; set; } = "chat";
+
+        [JsonPropertyName("inputModalities")]
+        public List<string> InputModalities { get; set; } = new();
+    }
+
+    public class ModelSearchEntry
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; } = "";
+
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = "";
+
+        [JsonPropertyName("inputModalities")]
+        public List<string> InputModalities { get; set; } = new();
+
+        [JsonPropertyName("contextLength")]
+        public int ContextLength { get; set; }
     }
 }

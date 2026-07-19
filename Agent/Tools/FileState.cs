@@ -41,6 +41,7 @@ namespace Pandora.Agent.Tools
             {
                 _changedFiles[path] = ChangeType.Modified;
             }
+            _session.ChangeInfo.TextFile = GetChangedFilesStr(true);
         }
         public FileState(ISession session,bool autoFind = false)
         { 

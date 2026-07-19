@@ -25,23 +25,20 @@ namespace Pandora.Agent
         public IEventBus EventBus { get; private set; }
         public ISafetyManager SafetyManager { get; private set; }
         public IAgentEnvironment AgentEnvironment { get; private set; }
-
         public long CreatedTime { get; private set; }
-
         public long UpdatedTime {  get; private set; }
-
         public FileState TextFileState { get; private set; }
-
         public bool IsSubAgent { get; set; } = false;
-
+        public SessionChangeInfo ChangeInfo { get; set; }
         public Session(ICore core, string sessionId, WorkMode workMode)
         {
+            ChangeInfo = new SessionChangeInfo();
             TextFileState = new FileState(this);
             Core = core;
             SessionId = sessionId;
             WorkMode = workMode;
             EventBus = new EventBus();
-            AgentEnvironment = new AgentEnvironment();
+            AgentEnvironment = new AgentEnvironment(this);
             SafetyManager = new SafetyManager(this);
             UsageManager = new UsageManager();
             AgentToolManager = new AgentToolManager(this);

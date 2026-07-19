@@ -24,6 +24,7 @@ namespace Pandora.Interfaces
         public IAgentEnvironment AgentEnvironment { get;}
         public IAiService AiService { get;}
         public FileState TextFileState { get; }
+        public SessionChangeInfo ChangeInfo { get; }
         public Task CompleteChat(CompleteChatOptions options, CancellationToken cancellationToken);
         public Task<string> CreateSessionTitle(string prompt);
     }
@@ -40,5 +41,17 @@ namespace Pandora.Interfaces
     {
         public uint MaxToolsUse { get; set; } = 9999;
         public uint MaxToolError { get; set; } = 999;
+    }
+    public class SessionChangeInfo 
+    {
+        public string? TextFile { get; set; }
+        public string? WorkingDirectory { get; set; }
+        public override string ToString()
+        {
+            string str = $"<change>\n{TextFile}\n{WorkingDirectory}\n<change>";
+            TextFile = null;
+            WorkingDirectory = null;
+            return str;
+        }
     }
 }

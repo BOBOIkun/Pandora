@@ -4,8 +4,14 @@ namespace Pandora.Agent
 {
     public class AgentEnvironment : IAgentEnvironment
     {
-        public string WorkingDirectory { get; private set; } = AppDomain.CurrentDomain.BaseDirectory;
+        private readonly ISession _session;
+        public string WorkingDirectory { get; private set; } = null!;
         public string BinDirectory { get; private set; } = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "bin");
+        public AgentEnvironment(ISession session)
+        {
+            _session = session;
+            SetWorkingDirectory(Environment.CurrentDirectory);
+        }
         public void SetWorkingDirectory(string workingDirectory)
         {
             if (!Directory.Exists(workingDirectory))
@@ -13,6 +19,7 @@ namespace Pandora.Agent
                 throw new PandoraException($"Working directory {workingDirectory} not found.");
             }
             WorkingDirectory = workingDirectory;
+            _session.ChangeInfo.WorkingDirectory = "Now workingDirectory is " + workingDirectory;
         }
     }
 }
