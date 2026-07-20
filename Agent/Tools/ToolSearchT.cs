@@ -14,11 +14,9 @@ namespace Pandora.Agent.Tools
             return new AgentTool()
             {
                 ToolName = "tool_search",
-                FullDescription = "Manage task list. "
-                    + "Supported operations: add (add tasks), get (view task list), finish (complete current task). "
-                    + "Use 'add' with 'tasks' parameter to set multiple tasks separated by '|'.",
+                FullDescription = "将工具的完整定义加载入系统信息,仅针对<tool-list>的工具",
                 Parameters = [
-                    new() { Name = "tool_name",  Type = AgentParametersType.STRING, Description = "Operation type: add, get, finish", Required = true },
+                    new() { Name = "tool_name",  Type = AgentParametersType.STRING, Description = "需要加载的工具名", Required = true },
                 ],
                 FullLoad = true,
                 ParametersTypeCheck = true,
