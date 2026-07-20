@@ -22,7 +22,7 @@ namespace Pandora
         private readonly Task _consumeTask;
         public readonly static  ILogger Instance = new Logger();
         public FileInfo _currentLogFile =null!;
-        public static readonly TimeSpan _forceFlushInterval = TimeSpan.FromSeconds(30);
+        private static readonly TimeSpan _forceFlushInterval = TimeSpan.FromSeconds(30);
         public Logger()
         {
             Directory.CreateDirectory(_logPath);

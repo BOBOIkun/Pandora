@@ -124,6 +124,7 @@ namespace Pandora.Agent
                     }
                     else if (toolCall.retSatus == ToolsResult.UnKnownError)
                     {
+                        Logger.Instance.Log(LogLevel.Error, $"Tool Use Error: {ret.ToolsCalls[i].ToolName} return {toolCall.ret?.Text}",nameof(CompleteChat));
                         throw new Exception("Tool Use Error");
                     }
                 }
@@ -136,21 +137,22 @@ namespace Pandora.Agent
             jObj = TryParseJsonObject(parameters);
             if (jObj == null)
                 return (new MessageContent("parameters error"), ToolsResult.ParametersError);
-            if (toolName == "ToolLoad")
-            {
-                jObj.TryGetPropertyValue("name", out var name);
-                if (name == null)
-                    return (new MessageContent("name is required"), ToolsResult.ParametersError);
-                string toolName_ = name.ToString();
-                AgentToolManager.FullLoadTool(toolName_);
-                return (new MessageContent($"success load tool {toolName_}"), ToolsResult.Success);
-            }
             if (AgentToolManager.Tools.TryGetValue(toolName, out AgentTool? tool) && tool != null)
             {
-                var (ret, retSatus) = tool.ToolFunction(this, new AgentToolParameterValue(jObj, tool.Parameters, tool.ParametersTypeCheck));
-                if (ret == null)
-                    return (new MessageContent("tool return null"), retSatus);
-                return (ret, retSatus);
+                (MessageContent? ret, ToolsResult retSatus) k;
+                try
+                {
+                    k = tool.ToolFunction(this, new AgentToolParameterValue(jObj, tool.Parameters, tool.ParametersTypeCheck));
+                }
+                catch (Exception e)
+                {
+                    Logger.Instance.Log(LogLevel.Error, $"Tool Use Error: {toolName} catch {e}",nameof(ToolUse));
+                    return (new MessageContent($"tool error: {e.Message}"), ToolsResult.UnKnownError);
+                }
+                
+                if (k.ret == null)
+                    return (new MessageContent("tool return null"), k.retSatus);
+                return (k.ret, k.retSatus);
             }
             else
             {

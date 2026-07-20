@@ -35,9 +35,6 @@ namespace Pandora.Agent
         public IList<ToolDefinition> GetAgentFullToolDefinitions(WorkMode workMode)
         {
             var toolDefinitions =GetOpenAiToolDefinitions(workMode, true);
-            toolDefinitions.Add(ToolDefinition.DefineFunction(new FunctionDefinitionBuilder("ToolLoad", "加载工具完整定义")
-                    .AddParameter("name", PropertyDefinition.DefineString("工具名字"), true)
-                    .Build()));
             return toolDefinitions;
         }
         public IList<ToolDefinition> GetOpenAiToolDefinitions(WorkMode workMode,bool fullLoad = false)
