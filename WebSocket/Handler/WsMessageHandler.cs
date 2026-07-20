@@ -39,7 +39,7 @@ namespace Pandora.WebSocket.Handler
         public void OnDisconnected(WsConnection conn)
         {
             _connectionSessions.Remove(conn);
-            Console.WriteLine("[WsMessageHandler] Connection mapping cleaned up");
+            Logger.Instance.Log(LogLevel.Info, "Connection mapping cleaned up");
         }
 
         /// <summary>主消息入口</summary>
@@ -53,7 +53,7 @@ namespace Pandora.WebSocket.Handler
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[WsMessageHandler] Deserialize error: {ex.Message}");
+                Logger.Instance.Log(LogLevel.Error, $"Deserialize error: {ex}", nameof(HandleMessageAsync));
                 return;
             }
 
@@ -84,13 +84,13 @@ namespace Pandora.WebSocket.Handler
                     case "get_common_folders": await HandleGetCommonFolders(msg, conn); break;
                     case "search_models": await HandleSearchModels(msg, conn); break;
                     default:
-                        Console.WriteLine($"[WsMessageHandler] Unknown message type: {msg.Type}");
+                        Logger.Instance.Log(LogLevel.Warning, $"Unknown message type: {msg.Type}");
                         break;
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[WsMessageHandler] Error handling '{msg.Type}': {ex.Message}");
+                Logger.Instance.Log(LogLevel.Error, $"Error handling '{msg.Type}': {ex}", nameof(HandleMessageAsync));
                 try
                 {
                     await conn.SendAsync(WsProtocol.Serialize(
@@ -108,6 +108,7 @@ namespace Pandora.WebSocket.Handler
             var mode = ResolveWorkMode(msg.WorkMode);
             var session = _core.CreateSession(sessionId, mode);
             _connectionSessions[conn] = sessionId;
+            Logger.Instance.Log(LogLevel.Info, $"Session created: {sessionId} ({mode})");
 
             // 指定了工作区路径 → 设置
             if (!string.IsNullOrEmpty(msg.Workspace))
@@ -147,6 +148,7 @@ namespace Pandora.WebSocket.Handler
 
             if (_core.Sessions.Remove(sid))
             {
+                Logger.Instance.Log(LogLevel.Info, $"Session deleted: {sid}");
                 _sessionCts.Remove(sid);
                 if (_connectionSessions.TryGetValue(conn, out var cur) && cur == sid)
                     _connectionSessions[conn] = null;
@@ -766,7 +768,7 @@ namespace Pandora.WebSocket.Handler
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[WsMessageHandler] Audio transcription failed: {ex.Message}");
+                Logger.Instance.Log(LogLevel.Error, $"Audio transcription failed: {ex}", nameof(HandleAudioInput));
                 await conn.SendAsync(WsProtocol.Serialize(
                     WsProtocol.Error(sid, $"Transcription failed: {ex.Message}")));
             }
@@ -788,7 +790,7 @@ namespace Pandora.WebSocket.Handler
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[WsMessageHandler] Generate title failed: {ex.Message}");
+                Logger.Instance.Log(LogLevel.Error, $"Generate title failed: {ex}", nameof(GenerateSessionTitle));
             }
             finally
             {

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.WebSockets;
+using Pandora.Interfaces;
 using Pandora.WebSocket.Handler;
 
 namespace Pandora.WebSocket.Server
@@ -21,7 +22,7 @@ namespace Pandora.WebSocket.Server
         {
             _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             _listener.Start();
-            Console.WriteLine($"[WsServer] Listening on {string.Join(", ", _listener.Prefixes)}");
+            Logger.Instance.Log(LogLevel.Info, $"Listening on {string.Join(", ", _listener.Prefixes)}");
 
             try
             {
@@ -36,7 +37,7 @@ namespace Pandora.WebSocket.Server
             finally
             {
                 _listener.Stop();
-                Console.WriteLine("[WsServer] Stopped");
+                Logger.Instance.Log(LogLevel.Info, "Server stopped");
             }
         }
 
@@ -69,7 +70,7 @@ namespace Pandora.WebSocket.Server
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[WsServer] WebSocket accept failed: {ex.Message}");
+                Logger.Instance.Log(LogLevel.Error, $"WebSocket accept failed: {ex}", nameof(HandleRequestAsync));
                 return;
             }
 

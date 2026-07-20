@@ -1,5 +1,6 @@
 using System.Net.WebSockets;
 using System.Text;
+using Pandora.Interfaces;
 using Pandora.WebSocket.Handler;
 
 namespace Pandora.WebSocket.Server
@@ -22,7 +23,7 @@ namespace Pandora.WebSocket.Server
         {
             var buffer = new byte[4096];
             var messageBuilder = new StringBuilder();
-            Console.WriteLine("[WsConnection] Connected");
+            Logger.Instance.Log(LogLevel.Info, "Connected");
 
             try
             {
@@ -40,7 +41,7 @@ namespace Pandora.WebSocket.Server
 
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
-                        Console.WriteLine("[WsConnection] Client sent close frame");
+                        Logger.Instance.Log(LogLevel.Info, "Client sent close frame");
                         await _ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", ct);
                         break;
                     }
@@ -57,11 +58,11 @@ namespace Pandora.WebSocket.Server
             }
             catch (WebSocketException ex)
             {
-                Console.WriteLine($"[WsConnection] WebSocket error: {ex.Message}");
+                Logger.Instance.Log(LogLevel.Error, $"WebSocket error: {ex}", nameof(RunAsync));
             }
             finally
             {
-                Console.WriteLine("[WsConnection] Disconnected");
+                Logger.Instance.Log(LogLevel.Info, "Disconnected");
                 _handler.OnDisconnected(this);
                 if (_ws.State == WebSocketState.Open || _ws.State == WebSocketState.CloseReceived)
                 {

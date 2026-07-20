@@ -1,5 +1,6 @@
 using Pandora.Agent;
 using Pandora.Agent.Tools;
+using Pandora.Interfaces;
 using Pandora.WebSocket.Handler;
 using Pandora.WebSocket.Server;
 
@@ -10,10 +11,10 @@ namespace Pandora
         public static async Task Main(string[] args)
         {
             var host = args.Length > 0 ? args[0] : "http://localhost:9527/";
-            Console.WriteLine($"[Pandora] Starting WebSocket server on {host} (ws path: /ws)");
+            Logger.Instance.Log(LogLevel.Info, $"Starting WebSocket server on {host} (ws path: /ws)");
 
             var core = new Core();
-            Console.WriteLine($"[Pandora] Core initialized, {core.ProviderManager.Providers.Count} provider(s) loaded");
+            Logger.Instance.Log(LogLevel.Info, $"Core initialized, {core.ProviderManager.Providers.Count} provider(s) loaded");
 
             var handler = new WsMessageHandler(core);
             var server = new WsServer(host, handler);
@@ -22,7 +23,7 @@ namespace Pandora
             var cts = new CancellationTokenSource();
             Console.CancelKeyPress += (_, e) =>
             {
-                Console.WriteLine("\n[Pandora] Shutting down...");
+                Logger.Instance.Log(LogLevel.Info, "Server shutting down");
                 e.Cancel = true;
                 cts.Cancel();
             };
@@ -33,7 +34,7 @@ namespace Pandora
             }
             catch (OperationCanceledException)
             {
-                Console.WriteLine("[Pandora] Server stopped");
+                Logger.Instance.Log(LogLevel.Info, "Server stopped");
             }
         }
     }

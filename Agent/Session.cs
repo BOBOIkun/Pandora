@@ -50,6 +50,7 @@ namespace Pandora.Agent
         private void EndTask()
         {
             _=TextFileState.FindcChangedFiles();
+            
         }
         public async Task CompleteChat(CompleteChatOptions options, CancellationToken cancellationToken)
         {

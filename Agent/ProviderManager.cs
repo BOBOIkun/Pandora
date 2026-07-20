@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Pandora.Interfaces;
 
 namespace Pandora.Agent
 {
@@ -46,7 +47,7 @@ namespace Pandora.Agent
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[ProviderManager] 跳过 {Path.GetFileName(file)}: {ex.Message}");
+                    Logger.Instance.Log(LogLevel.Warning, $"跳过 {Path.GetFileName(file)}: {ex.Message}");
                 }
             }
         }
@@ -64,7 +65,7 @@ namespace Pandora.Agent
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[ProviderManager] 加载默认模型失败: {ex.Message}");
+                Logger.Instance.Log(LogLevel.Error, $"加载默认模型失败: {ex}", nameof(LoadDefaults));
             }
         }
 
