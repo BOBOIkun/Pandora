@@ -120,14 +120,17 @@ namespace Pandora
         }
         private void CreateNewLogFile()
         {
+            
             string date = DateTime.Now.ToString("yyyyMMdd");
+            string dir = Path.Combine(_logPath, date);
+            Directory.CreateDirectory(dir);
             int idx = 1;
             string path;
             do
             {
-                path = Path.Combine(_logPath, $"log_{date}_{idx}.log");
+                path = Path.Combine(dir, $"log_{idx}.log");
                 idx++;
-            } while (File.Exists(path));
+            } while (File.Exists(path) && new FileInfo(path).Length > _singleFileMaxSize);
 
             _writer?.Dispose();
             //_currentLogPath = path;

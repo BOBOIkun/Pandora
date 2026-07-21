@@ -83,6 +83,7 @@ namespace Pandora.WebSocket.Handler
                     case "list_directory": await HandleListDirectory(msg, conn); break;
                     case "get_common_folders": await HandleGetCommonFolders(msg, conn); break;
                     case "search_models": await HandleSearchModels(msg, conn); break;
+                    case "ask_user_response": HandleAskUserResponse(msg); break;
                     default:
                         Logger.Instance.Log(LogLevel.Warning, $"Unknown message type: {msg.Type}");
                         break;
@@ -343,6 +344,16 @@ namespace Pandora.WebSocket.Handler
 
             await conn.SendAsync(WsProtocol.Serialize(
                 WsProtocol.ModelSearchResult(requestId, results, total)));
+        }
+
+        private static void HandleAskUserResponse(ClientMessage msg)
+        {
+            var requestId = msg.RequestId;
+            var answer = msg.Content ?? "";
+            if (!string.IsNullOrEmpty(requestId))
+            {
+                SessionBridge.ResolveAskUserQuestion(requestId, answer);
+            }
         }
 
         private async Task HandleSelectSession(ClientMessage msg, WsConnection conn)

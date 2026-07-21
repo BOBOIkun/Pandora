@@ -214,6 +214,15 @@ namespace Pandora.WebSocket.Protocol
             command
         };
 
+        public static object AskUserQuestion(string sessionId, string toolCallId, string question, string[]? options) => new
+        {
+            type = "ask_user_question",
+            sessionId,
+            toolCallId,
+            question,
+            options
+        };
+
         // ============ Safety ============
 
         public static object SafetyModeChanged(string sessionId, string mode) => new

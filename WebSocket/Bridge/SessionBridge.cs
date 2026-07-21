@@ -15,6 +15,7 @@ namespace Pandora.WebSocket.Bridge
         // Static: TCS 字典，跨实例共享，供 WsMessageHandler 回调
         private static readonly ConcurrentDictionary<string, TaskCompletionSource<bool>> FileAccessPending = new();
         private static readonly ConcurrentDictionary<string, TaskCompletionSource<bool>> BashAccessPending = new();
+        public static readonly ConcurrentDictionary<string, TaskCompletionSource<string>> AskUserQuestionPending = new();
 
         public SessionBridge(ISession session, WsConnection conn)
         {
@@ -35,6 +36,7 @@ namespace Pandora.WebSocket.Bridge
             _session.EventBus.Subscribe<FileAccessConfirmEvent, bool>(OnFileAccessConfirm);
             _session.EventBus.Subscribe<BashConfirmEvent, bool>(OnBashConfirm);
             _session.EventBus.Subscribe<SessionTitleChangedEvent>(OnSessionTitleChanged);
+            _session.EventBus.Subscribe<AskUserQuestionEvent>(OnAskUserQuestion);
         }
 
         /// <summary>取消订阅（CompleteChat 结束后调用，避免影响其他连接）</summary>
@@ -59,6 +61,15 @@ namespace Pandora.WebSocket.Bridge
             if (BashAccessPending.TryRemove(requestId, out var tcs))
             {
                 tcs.TrySetResult(approved);
+            }
+        }
+
+        /// <summary>供 WsMessageHandler 调用：解析用户问题回答</summary>
+        public static void ResolveAskUserQuestion(string requestId, string answer)
+        {
+            if (AskUserQuestionPending.TryRemove(requestId, out var tcs))
+            {
+                tcs.TrySetResult(answer);
             }
         }
 
@@ -136,6 +147,13 @@ namespace Pandora.WebSocket.Bridge
             _conn.SendFireAndForget(
                 Protocol.WsProtocol.Serialize(
                     Protocol.WsProtocol.SessionTitleChanged(e.SessionId, e.Title)));
+        }
+
+        private void OnAskUserQuestion(AskUserQuestionEvent e)
+        {
+            _conn.SendFireAndForget(
+                Protocol.WsProtocol.Serialize(
+                    Protocol.WsProtocol.AskUserQuestion(e.SessionId, e.RequestId, e.Question, e.Options)));
         }
 
         private bool OnFileAccessConfirm(FileAccessConfirmEvent e)

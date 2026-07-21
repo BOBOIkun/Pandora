@@ -72,4 +72,10 @@ namespace Pandora.Models
     {
         public required string Title { get; set; }
     }
+    public class AskUserQuestionEvent : EventBase
+    {
+        public required string Question { get; set; }
+        public string[]? Options { get; set; }
+        public string RequestId { get; set; } = "";
+    }
 }
