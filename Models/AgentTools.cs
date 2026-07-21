@@ -51,6 +51,8 @@ namespace Pandora.Models
         public bool ParametersTypeCheck { get; set; } = true;
         public required AgentToolParameter[] Parameters { get; set; }
         [JsonIgnore]
+        public bool Enabled { get; set; } = true;
+        [JsonIgnore]
         public WorkMode SupportedModes { get; set; } = WorkMode.None;
         [JsonIgnore]
         public bool ReadOnly { get; set; } = false;//工具是否只读不写

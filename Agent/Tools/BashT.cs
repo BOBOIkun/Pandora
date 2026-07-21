@@ -1,3 +1,4 @@
+using Microsoft.Win32;
 using OpenAI.Models.Chat;
 using Pandora.Interfaces;
 using Pandora.Models;
@@ -10,6 +11,7 @@ namespace Pandora.Agent.Tools
 {
     public class BashT : IAgentTool
     {
+        private static string? PWSHFileName= GetPWSHFileName();
         public AgentTool GetToolDefinition(ISession session)
         {
             return new AgentTool()
@@ -28,6 +30,7 @@ namespace Pandora.Agent.Tools
                 FullLoad = true,
                 ParametersTypeCheck = true,
                 ReadOnly = false,
+                Enabled= PWSHFileName!= null,
                 SupportedModes = WorkMode.Working | WorkMode.Coding,
                 ToolFunction = Execute
             };
@@ -40,6 +43,8 @@ namespace Pandora.Agent.Tools
 
         private (MessageContent? ret, ToolsResult retSatus) Execute(ISession session, AgentToolParameterValue param)
         {
+            if(PWSHFileName==null)
+                return (new MessageContent("Error: PowerShell is not installed"), ToolsResult.UnKnownError);
             string command = param.GetString("command");
             if (string.IsNullOrWhiteSpace(command))
                 return (new MessageContent("Error: command is empty"), ToolsResult.ParametersError);
@@ -65,30 +70,20 @@ namespace Pandora.Agent.Tools
             var sysPath = Environment.GetEnvironmentVariable("PATH") ?? "";
             psi.Environment["PATH"] = sysPath;
 
-            if (OperatingSystem.IsWindows())
-            {
-                psi.FileName = "powershell.exe";
-                var cleanedCommand = command;
-                if (cleanedCommand.StartsWith("powershell ", StringComparison.OrdinalIgnoreCase))
-                    cleanedCommand = cleanedCommand.Substring(11).TrimStart();
-                else if (cleanedCommand.StartsWith("pwsh ", StringComparison.OrdinalIgnoreCase))
-                    cleanedCommand = cleanedCommand.Substring(5).TrimStart();
+            psi.FileName = "powershell.exe";
+            var cleanedCommand = command;
+            if (cleanedCommand.StartsWith("powershell ", StringComparison.OrdinalIgnoreCase))
+                cleanedCommand = cleanedCommand.Substring(11).TrimStart();
+            else if (cleanedCommand.StartsWith("pwsh ", StringComparison.OrdinalIgnoreCase))
+                cleanedCommand = cleanedCommand.Substring(5).TrimStart();
 
-                const string pwshPrefix =
-                    "[Console]::OutputEncoding=[Console]::InputEncoding=[System.Text.Encoding]::UTF8;" +
-                    "$ProgressPreference='SilentlyContinue';" +
-                    "$InformationPreference='SilentlyContinue';";
-
-                var wrappedCommand = pwshPrefix + cleanedCommand;
-                var bytes = Encoding.Unicode.GetBytes(wrappedCommand);
-                psi.Arguments = $"-NoProfile -ExecutionPolicy Bypass -EncodedCommand {Convert.ToBase64String(bytes)}";
-            }
-            else
-            {
-                psi.FileName = "/bin/bash";
-                psi.Arguments = "-c \"$(cat)\"";
-                psi.RedirectStandardInput = true;
-            }
+            const string pwshPrefix =
+                "[Console]::OutputEncoding=[Console]::InputEncoding=[System.Text.Encoding]::UTF8;" +
+                "$ProgressPreference='SilentlyContinue';" +
+                "$InformationPreference='SilentlyContinue';";
+            var wrappedCommand = pwshPrefix + cleanedCommand;
+            var bytes = Encoding.Unicode.GetBytes(wrappedCommand);
+            psi.Arguments = $"-NoProfile -ExecutionPolicy Bypass -EncodedCommand {Convert.ToBase64String(bytes)}";
 
             psi.StandardOutputEncoding = Encoding.UTF8;
             psi.StandardErrorEncoding = Encoding.UTF8;
@@ -114,11 +109,6 @@ namespace Pandora.Agent.Tools
 
                 process.Start();
 
-                if (!OperatingSystem.IsWindows())
-                {
-                    process.StandardInput.Write(command);
-                    process.StandardInput.Close();
-                }
 
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
@@ -206,7 +196,22 @@ namespace Pandora.Agent.Tools
             }
             return sb.ToString().TrimEnd();
         }
-
+        private static string? GetPWSHFileName()
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                return null;
+            }
+            if (HasInstalledPowerShell7())
+            {
+                return "pwsh.exe";
+            }
+            if (HasWindowsPowerShell5())
+            {
+                return "powershell.exe";
+            }
+            return null;
+        }
         private static void KillProcessTree(Process process)
         {
             try
@@ -216,6 +221,45 @@ namespace Pandora.Agent.Tools
             catch
             {
                 try { process.Kill(); } catch { }
+            }
+        }
+        private static bool HasInstalledPowerShell7()
+        {
+            var versions = new List<string>();
+            // 两个注册表路径都要遍历
+            string[] regPaths =
+            {
+            @"SOFTWARE\Microsoft\PowerShellCore\InstalledVersions",
+            @"SOFTWARE\WOW6432Node\Microsoft\PowerShellCore\InstalledVersions"
+        };
+
+            foreach (var path in regPaths)
+            {
+                using var key = Registry.LocalMachine.OpenSubKey(path);
+                if (key == null) continue;
+
+                foreach (var subKeyName in key.GetSubKeyNames())
+                {
+                    // 匹配7.x 版本
+                    if (subKeyName.StartsWith("7."))
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+        private static bool HasWindowsPowerShell5()
+        {
+            try
+            {
+                using var reg = Registry.LocalMachine.OpenSubKey(
+                    @"SOFTWARE\Microsoft\PowerShell\1\ShellIds\Microsoft.PowerShell");
+                return reg != null;
+            }
+            catch
+            {
+                return false;
             }
         }
     }
