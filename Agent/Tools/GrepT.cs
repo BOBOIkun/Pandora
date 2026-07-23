@@ -3,6 +3,7 @@ using Pandora.Interfaces;
 using Pandora.Models;
 using System;
 using System.Collections.Generic;
+using System.Reflection.Metadata.Ecma335;
 using System.Text;
 
 namespace Pandora.Agent.Tools
@@ -31,10 +32,19 @@ namespace Pandora.Agent.Tools
                 ToolFunction = Execute
             };
         }
+        private static string? PatternSafeCheck(string pattern)
+        {
+            if (pattern == ".")
+                return "If you want to find files,don't use this tool";
+            return null;
+        }
         private (MessageContent? ret, ToolsResult retSatus) Execute(ISession session, AgentToolParameterValue param) 
         { 
             if(!param.Has("pattern") || !param.Has("path")) 
                 return (new MessageContent("pattern and path required"), ToolsResult.ParametersError);
+            string? error = PatternSafeCheck(param.GetString("pattern"));
+            if (error != null)
+                return (new MessageContent(error), ToolsResult.ParametersError);
             string pattern = param.GetString("pattern")!;
             string path = param.GetString("path")!;
             if(!Directory.Exists(path))

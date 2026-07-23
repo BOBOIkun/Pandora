@@ -464,9 +464,15 @@ namespace Pandora.WebSocket.Handler
                 await session.CompleteChat(new CompleteChatOptions(), cts.Token);
                 if (string.IsNullOrEmpty(session.Title))
                 {
-                    string title = await session.CreateSessionTitle(content);
-                    session.Title = title;
-                    session.EventBus.Publish(new SessionTitleChangedEvent() { SessionId = sid, Title = title });
+                    bool shouldGenerate;
+                    lock (_titleLock) shouldGenerate = _titleGenerating.Add(sid);
+                    if (shouldGenerate)
+                    {
+                        string title = await session.CreateSessionTitle(content);
+                        session.Title = title;
+                        session.EventBus.Publish(new SessionTitleChangedEvent() { SessionId = sid, Title = title });
+                        lock (_titleLock) _titleGenerating.Remove(sid);
+                    }
                 }
             }
             catch (OperationCanceledException)

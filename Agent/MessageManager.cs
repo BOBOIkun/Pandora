@@ -1,8 +1,11 @@
 using OpenAI.Models.Chat;
 using Pandora.Interfaces;
+using Pandora.JsonC;
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Text;
+using System.Text.Json;
 using static Pandora.Agent.AiService;
 
 namespace Pandora.Agent
@@ -12,6 +15,7 @@ namespace Pandora.Agent
         private int _systemMessageIndex = -1;
         private readonly List<ChatMessage> _messages=[];
         private ISession _session;
+        private StreamWriter writer = new StreamWriter(new FileStream(@"G:\Download\Desktop\Agent\1.json", FileMode.Append));
         public MessageManager(ISession session)
         {
             _session = session;
@@ -38,6 +42,12 @@ namespace Pandora.Agent
         }
         public int AddMessage(ChatMessage message)
         {
+            ArrayBufferWriter<byte> bufferWriter = new ArrayBufferWriter<byte>();
+            Utf8JsonWriter writer = new Utf8JsonWriter(bufferWriter);
+            ChatMessageJ.WriteMessage(writer, message, true);
+            writer.Flush();
+            _=this.writer.WriteLineAsync(Encoding.UTF8.GetString(bufferWriter.WrittenSpan));
+            this.writer.Flush();
             int index = _messages.Count;
             _messages.Add(message);
             return index;

@@ -50,9 +50,12 @@ namespace Pandora.Agent.Tools
                 return (new MessageContent("Access denied"), ToolsResult.ParametersError);
             if (!SingeleMatche(File.ReadAllText(path), oldString) && !replaceAll)
                 return (new MessageContent("old_string is not unique in the file"), ToolsResult.ParametersError);
+            long oldTime = File.GetLastWriteTimeUtc(path).ToFileTimeUtc();
             string text = File.ReadAllText(path);
+            session.TextFileState.Locked = true;
             File.WriteAllText(path, text.Replace(oldString, newString));
-            session.TextFileState.FileChangeCheck(path);
+            session.TextFileState.SetLock(path, oldTime);
+            //session.TextFileState.FileChangeCheck(path);
             return (new MessageContent($"Successfully edited {path}"), ToolsResult.Success);
         }
         private static bool SingeleMatche(string text, string str)

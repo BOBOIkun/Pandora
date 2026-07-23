@@ -10,5 +10,6 @@ namespace Pandora.Interfaces
         public string WorkingDirectory { get; }
         public string BinDirectory { get; }
         public void SetWorkingDirectory(string workingDirectory);
+        public string SessionDataDirectory { get; }
     }
 }

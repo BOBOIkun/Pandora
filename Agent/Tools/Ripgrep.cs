@@ -87,7 +87,7 @@ namespace Pandora.Agent.Tools
             }
             process.Dispose();
         }
-        private RipgrepEventType GetEventType(byte[] line)
+        private static RipgrepEventType GetEventType(byte[] line)
         {
             Utf8JsonReader reader = new Utf8JsonReader(line);
             RipgrepEventType ripgrepEventType = RipgrepEventType.Unknown;

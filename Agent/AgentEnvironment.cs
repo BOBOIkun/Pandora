@@ -6,6 +6,7 @@ namespace Pandora.Agent
     {
         private readonly ISession _session;
         public string WorkingDirectory { get; private set; } = null!;
+        public string SessionDataDirectory { get; private set; }= Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data","sessions");
         public string BinDirectory { get; private set; } = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "bin");
         public AgentEnvironment(ISession session)
         {
