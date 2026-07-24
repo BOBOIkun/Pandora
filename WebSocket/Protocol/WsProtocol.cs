@@ -183,7 +183,7 @@ namespace Pandora.WebSocket.Protocol
         // ============ Tool Call ============
 
         public static object ToolCall(string sessionId, string messageId, string toolCallId,
-            string toolName, string status, string? arguments, string? result, bool success) => new
+            string toolName, string status, string? arguments, bool success) => new
         {
             type = "tool_call",
             sessionId,
@@ -192,7 +192,6 @@ namespace Pandora.WebSocket.Protocol
             toolName,
             status,
             arguments,
-            result,
             success
         };
 
@@ -399,9 +398,6 @@ namespace Pandora.WebSocket.Protocol
 
         [JsonPropertyName("arguments")]
         public string? Arguments { get; set; }
-
-        [JsonPropertyName("result")]
-        public string? Result { get; set; }
     }
 
     public class AllHistorySession

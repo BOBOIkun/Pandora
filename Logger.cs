@@ -134,7 +134,7 @@ namespace Pandora
 
             _writer?.Dispose();
             //_currentLogPath = path;
-            _writer = new StreamWriter(new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read, 1024, FileOptions.WriteThrough),Encoding.UTF8);
+            _writer = new StreamWriter(new FileStream(path, FileMode.OpenOrCreate, FileAccess.Write, FileShare.Read, 1024, FileOptions.WriteThrough),Encoding.UTF8);
             _currentLogFile=new FileInfo(path);
         }
         private void CheckFileRoll()

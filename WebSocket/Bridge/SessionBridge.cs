@@ -36,7 +36,7 @@ namespace Pandora.WebSocket.Bridge
             _session.EventBus.Subscribe<FileAccessConfirmEvent, bool>(OnFileAccessConfirm);
             _session.EventBus.Subscribe<BashConfirmEvent, bool>(OnBashConfirm);
             _session.EventBus.Subscribe<SessionTitleChangedEvent>(OnSessionTitleChanged);
-            _session.EventBus.Subscribe<AskUserQuestionEvent>(OnAskUserQuestion);
+            _session.EventBus.Subscribe<AskUserQuestionEvent, string>(OnAskUserQuestion);
         }
 
         /// <summary>取消订阅（CompleteChat 结束后调用，避免影响其他连接）</summary>
@@ -122,7 +122,7 @@ namespace Pandora.WebSocket.Bridge
                     Protocol.WsProtocol.ToolCall(
                         e.SessionId, e.MessageId, e.ToolCallId,
                         e.ToolName, e.Success ? "completed" : "failed",
-                        e.Arguments, e.Result, e.Success)));
+                        e.Arguments, e.Success)));
         }
 
         private void OnError(AgentErrorEvent e)
@@ -149,11 +149,16 @@ namespace Pandora.WebSocket.Bridge
                     Protocol.WsProtocol.SessionTitleChanged(e.SessionId, e.Title)));
         }
 
-        private void OnAskUserQuestion(AskUserQuestionEvent e)
+        private string OnAskUserQuestion(AskUserQuestionEvent e)
         {
+            var tcs = new TaskCompletionSource<string>();
+            AskUserQuestionPending[e.RequestId] = tcs;
+
             _conn.SendFireAndForget(
                 Protocol.WsProtocol.Serialize(
                     Protocol.WsProtocol.AskUserQuestion(e.SessionId, e.RequestId, e.Question, e.Options)));
+
+            return tcs.Task.GetAwaiter().GetResult();
         }
 
         private bool OnFileAccessConfirm(FileAccessConfirmEvent e)

@@ -15,6 +15,7 @@ namespace Pandora.Interfaces
         public string Title { get; set; }
         public WorkMode WorkMode { get;}
         public IEventBus EventBus { get;}
+        public IDataManager DataManager { get;}
         public ICore Core { get;}
         public IMessageManager MessageManager { get;}
         public IUsageManager UsageManager { get;}
@@ -25,7 +26,6 @@ namespace Pandora.Interfaces
         public FileState TextFileState { get; }
         public SessionChangeInfo ChangeInfo { get; }
         public Task CompleteChat(CompleteChatOptions options, CancellationToken cancellationToken);
-        public Task<string> CreateSessionTitle(string prompt);
     }
     [Flags]
     public enum WorkMode

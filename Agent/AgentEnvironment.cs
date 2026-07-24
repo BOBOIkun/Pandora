@@ -20,6 +20,7 @@ namespace Pandora.Agent
                 throw new PandoraException($"Working directory {workingDirectory} not found.");
             }
             WorkingDirectory = workingDirectory;
+            _session.DataManager.SetWorkingDirectory(workingDirectory);
             _session.ChangeInfo.WorkingDirectory = "Now workingDirectory is " + workingDirectory;
         }
     }

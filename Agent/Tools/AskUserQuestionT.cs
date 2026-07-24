@@ -1,7 +1,6 @@
 using OpenAI.Models.Chat;
 using Pandora.Interfaces;
 using Pandora.Models;
-using Pandora.WebSocket.Bridge;
 
 namespace Pandora.Agent.Tools
 {
@@ -45,12 +44,8 @@ namespace Pandora.Agent.Tools
                 catch { /* ignore parse error */ }
             }
 
-            var tcs = new TaskCompletionSource<string>();
             var requestId = Guid.NewGuid().ToString();
-            SessionBridge.AskUserQuestionPending[requestId] = tcs;
-
-            // 通过 EventBus 通知 Bridge 发送 WS 消息
-            session.EventBus.Publish(new AskUserQuestionEvent
+            var answer = session.EventBus.Publish<AskUserQuestionEvent, string>(new AskUserQuestionEvent
             {
                 SessionId = session.SessionId,
                 Question = question,
@@ -58,10 +53,7 @@ namespace Pandora.Agent.Tools
                 RequestId = requestId
             });
 
-            // 同步等待用户回答（阻塞工具线程）
-            var answer = tcs.Task.GetAwaiter().GetResult();
-
-            return (new MessageContent(answer), ToolsResult.Success);
+            return (new MessageContent(answer ?? ""), ToolsResult.Success);
         }
     }
 }
