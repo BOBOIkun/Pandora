@@ -42,7 +42,7 @@ namespace Pandora.Agent
         /// <summary>
         /// 读取文件中上一行（从当前读取位置向前）。返回 null 表示已无更多行。
         /// </summary>
-        public string? ReadLine()
+        public Span<byte> ReadLine()
         {
             if (_disposed) throw new ObjectDisposedException(nameof(ReverseLineReader));
             if (End) return null;
@@ -86,7 +86,7 @@ namespace Pandora.Agent
 
             // 提取行内容（从 lineStart 到 lineEnd）
             long lineLength = lineEnd - lineStart;
-            if (lineLength == 0) return string.Empty;
+            if (lineLength == 0) return new();
 
             _fs.Seek(lineStart, SeekOrigin.Begin);
             byte[] lineBuffer = ArrayPool<byte>.Shared.Rent((int)lineLength);
@@ -102,9 +102,9 @@ namespace Pandora.Agent
                 var lineSpan = new Span<byte>(lineBuffer, 0, totalRead);
                 // 处理 Windows 风格行尾的 \r（仅在行末出现且前一次搜索未通过 \n 截断时可能出现）
                 if (lineSpan.Length > 0 && lineSpan[^1] == CR)
-                    lineSpan = lineSpan.Slice(0, lineSpan.Length - 1);
+                    lineSpan = lineSpan[..^1];
 
-                return Encoding.UTF8.GetString(lineSpan);
+                return lineSpan;
             }
             finally
             {

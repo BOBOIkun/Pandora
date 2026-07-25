@@ -152,20 +152,28 @@ namespace Pandora.Agent
             return new CompletionResult(reasoning.ToString(), content.ToString(), toolCalls, usage);
         }
         /// <summary>从 ProviderManager 加载默认 chat 模型</summary>
-        public void LoadDefaultModel()
+        public void LoadDefaultModel(bool flush = false)
         {
             var resolved = _providerManager.ResolveModel(_providerManager.DefaultChatModel)
                 ?? throw new InvalidOperationException("No default chat model configured in config.json");
             var resolvedAudio = _providerManager.ResolveModel(_providerManager.DefaultAsrModel);
             ApplyResolved(resolved, resolvedAudio);
+            if (flush)
+            {
+                _session.DataManager.SetModel(resolved.ProviderId, resolved.ModelName);
+            }
         }
 
         /// <summary>运行时切换供应商和模型</summary>
-        public bool SwitchModel(string providerId, string modelName)
+        public bool SwitchModel(string providerId, string modelName,bool flush = false)
         {
             var resolved = _providerManager.ResolveModel(new ModelSelection { Provider = providerId, Model = modelName });
             if (resolved == null) return false;
             ApplyResolved(resolved);
+            if (flush)
+            {
+                _session.DataManager.SetModel(resolved.ProviderId, resolved.ModelName);
+            }
             return true;
         }
 

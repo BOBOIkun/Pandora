@@ -10,8 +10,8 @@ namespace Pandora.Interfaces
 {
     public interface IAiService
     {
-        void LoadDefaultModel();
-        bool SwitchModel(string providerId, string modelName);
+        void LoadDefaultModel(bool flush=false);
+        bool SwitchModel(string providerId, string modelName,bool flush = false);
         void LoadDefaultAsrModel();
         bool SwitchAsrModel(string providerId, string modelName);
 

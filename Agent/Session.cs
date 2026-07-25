@@ -14,7 +14,7 @@ namespace Pandora.Agent
     public class Session : ISession
     {
         public string SessionId { get; private set; }
-        public string Title { get; set; } = "对话";
+        public string Title { get; set; } = "新对话";
         public ICore Core { get; private set; }
         public WorkMode WorkMode { get; private set; }
         public IMessageManager MessageManager { get; private set; }
@@ -30,6 +30,37 @@ namespace Pandora.Agent
         public FileState TextFileState { get; private set; }
         public bool IsSubAgent { get; set; } = false;
         public SessionChangeInfo ChangeInfo { get; set; }
+        public Session(ICore core, SessionInfo info)
+        {
+            Core = core;
+            EventBus = new EventBus();
+            ChangeInfo = new SessionChangeInfo();
+            TextFileState = new FileState(this);
+            TextFileState.OnChanged = () =>
+            {
+                ChangeInfo.TextFile = TextFileState.GetChangedFilesStr();
+            };
+            WorkMode = info.WorkMode;
+            SessionId = info.SessionId;
+            Title = info.Title?? "新对话";
+            AgentToolManager = new AgentToolManager(this);
+            AgentToolManager.LoadTools();
+            if (info.ToolFullLoad != null) AgentToolManager.FullLoadTool(info.ToolFullLoad);
+            MessageManager = new MessageManager(this, DataManagerStatic.ReadMessages(info));
+            DataManager = new DataManager(this);
+            AgentEnvironment = new AgentEnvironment(this);
+            AgentEnvironment.SetWorkingDirectory(info.WorkingDirectory, true);
+            UsageManager = new UsageManager(this);
+            UsageManager.Accumulate(info.Usage);
+            SafetyManager = new SafetyManager(this);
+            AiService = new AiService(this, Core.ProviderManager);
+            AiService.LoadDefaultModel();
+            if (info.AiServiceModelName!=null && info.AiServiceProviderId!=null)
+            {
+                AiService.SwitchModel(info.AiServiceProviderId, info.AiServiceModelName);
+            }
+            
+        }
         public Session(ICore core, string sessionId, WorkMode workMode)
         {
             ChangeInfo = new SessionChangeInfo();
@@ -43,14 +74,14 @@ namespace Pandora.Agent
             WorkMode = workMode;
             EventBus = new EventBus();
             AgentEnvironment = new AgentEnvironment(this);
+            DataManager = new DataManager(this);
             SafetyManager = new SafetyManager(this);
-            UsageManager = new UsageManager();
+            UsageManager = new UsageManager(this);
             AgentToolManager = new AgentToolManager(this);
             AgentToolManager.LoadTools();
             AiService = new AiService(this, Core.ProviderManager);
-            AiService.LoadDefaultModel();
-            DataManager = new DataManager(this);
-            MessageManager = new MessageManager(this);
+            AiService.LoadDefaultModel(true);            MessageManager = new MessageManager(this);
+            AgentEnvironment.SetWorkingDirectory(AgentEnvironment.WorkingDirectory,true);
         }
         public async Task CompleteChat(CompleteChatOptions options, CancellationToken cancellationToken)
         {
@@ -79,7 +110,7 @@ namespace Pandora.Agent
                 }
                 EventBus.Publish(new ContentEndEvent { SessionId = SessionId, FullContent = ret.Content });
                 MessageManager.AddAssistantMessageByCompletionResult(ret, ret.ToolsCalls.Count > 0, true);
-                UsageManager.Accumulate(ret.Usage);
+                UsageManager.Accumulate(ret.Usage,true);
                 EventBus.Publish(new AgentUsageChangedEvent
                 {
                     SessionId = SessionId,
@@ -131,7 +162,6 @@ namespace Pandora.Agent
                 }
                 TextFileState.Locked = false;
             }
-            DataManager.Flush();
         }
         public (MessageContent? ret, ToolsResult retSatus) ToolUse(string toolName, string parameters)
         {

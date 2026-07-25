@@ -13,6 +13,8 @@ namespace Pandora.Interfaces
         public ISession CreateSession(string? sessionId, WorkMode workMode);
         public PandoraHttpClientFactory HttpClientFactoryProxy { get;}
         public IConfigManager ConfigManager { get;}
+        public void DeleteSession(string sessionId);
+        public ISession LoadSessionFromDirectory(string directoryPath);
         public ProviderManager ProviderManager { get;}
     }
 }

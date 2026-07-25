@@ -12,7 +12,7 @@ namespace Pandora
     {
         private const uint _singleFileMaxSize = 1024 * 1024 * 10;
         private const LogLevel MaxLogLevel = LogLevel.Trace;
-        private static string _logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"log");
+        private static string _logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"data","log");
         private readonly Channel<LogMessage> _channel;
         private readonly ChannelReader<LogMessage> _re;
         private readonly ChannelWriter<LogMessage> _wr;

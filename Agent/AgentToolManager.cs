@@ -16,7 +16,20 @@ namespace Pandora.Agent
         {
             _session = session;
         }
-        public void FullLoadTool(string toolName)
+        private void SetFullLoadData()
+        {
+            List<string> toolNames = [];
+            foreach (var tool in _tools.Values)
+            {
+                if (tool.FullLoad)
+                {
+                    toolNames.Add(tool.ToolName);
+                }
+            }
+            _session.DataManager.SetToolFullLoad(toolNames);
+            //_session.DataManager.SetToolFullLoad(_tools.Select((e)=> e.Value.FullLoad).ToList());
+        }
+        public void FullLoadTool(string toolName, bool flush=false)
         {
             _toolsCache = null;
             if (_tools.TryGetValue(toolName, out AgentTool? tool) && tool != null)
@@ -25,6 +38,10 @@ namespace Pandora.Agent
             }else
             {
                 throw new PandoraException($"tool {toolName} not found");
+            }
+            if (flush)
+            {
+                SetFullLoadData();
             }
         }
 
@@ -103,6 +120,24 @@ namespace Pandora.Agent
                 builder.AddParameter(parameter.Name, property, parameter.Required);
             }
             return ToolDefinition.DefineFunction(builder.Build());
+        }
+
+        public void FullLoadTool(IList<string> toolNames, bool flush=false)
+        {
+            foreach (var toolName in toolNames) 
+            {
+                if (_tools.TryGetValue(toolName, out AgentTool? tool) && tool != null)
+                {
+                    tool.FullLoad=true;
+                }else
+                {
+                    Logger.Instance.Log(LogLevel.Warning, $"tool {toolName} not found",nameof(FullLoadTool));
+                }
+            }
+            if (flush)
+            {
+                SetFullLoadData();
+            }
         }
     }
 }

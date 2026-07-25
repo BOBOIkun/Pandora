@@ -18,16 +18,14 @@ namespace Pandora.Agent
         private int _systemMessageIndex = -1;
         private readonly List<ChatMessage> _messages=[];
         private ISession _session;
-        private StreamWriter OpenMessageJson()
-        {
-            string p = Path.Combine(_session.AgentEnvironment.SessionDataDirectory,_session.SessionId);
-            Directory.CreateDirectory(p);
-            return new StreamWriter(new FileStream(Path.Combine(p,"message.jsonl"),FileMode.OpenOrCreate,FileAccess.ReadWrite,FileShare.Read),Encoding.UTF8);
-        }
-        public MessageManager(ISession session)
+        public MessageManager(ISession session,List<ChatMessage>? chatMessages=null)
         {
             _session = session;
-            _systemMessageIndex =AddMessage(ChatMessage.FromSystem(GetAgentPrompt().ToString()));
+            if (chatMessages!=null)
+            {
+                _messages.AddRange(chatMessages);
+            }
+            _systemMessageIndex =AddMessage(ChatMessage.FromSystem(GetAgentPrompt().ToString()),false);
         }
         private string GetAgentPrompt()
         {
@@ -48,11 +46,14 @@ namespace Pandora.Agent
             sb.AppendLine("</tool-list>");
             return sb.ToString();
         }
-        public int AddMessage(ChatMessage message)
+        public int AddMessage(ChatMessage message,bool appendData=true)
         {
             int index = _messages.Count;
             _messages.Add(message);
-            _=_session.DataManager.AppendMessageAsync(message);
+            if (appendData)
+            {
+                _ = _session.DataManager.AppendMessageAsync(message);
+            }
             return index;
         }
         public IList<ChatMessage> GetMessages()

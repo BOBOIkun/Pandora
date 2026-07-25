@@ -33,7 +33,7 @@ namespace Pandora.Agent.Tools
                 return (new MessageContent("Parameter 'tool_name' is required"), ToolsResult.ParametersError);
             }
             string toolName = value.GetString("tool_name");
-            session.AgentToolManager.FullLoadTool(toolName);
+            session.AgentToolManager.FullLoadTool(toolName,true);
             return (new MessageContent($"success load tool {toolName}"), ToolsResult.Success);
         }
 

@@ -10,7 +10,7 @@ namespace Pandora.Interfaces
     {
         public IList<ChatMessage> GetMessages();
         //public IList<ChatMessage> GetMessages(int limit);
-        public int AddMessage(ChatMessage message);
+        public int AddMessage(ChatMessage message,bool appendData);
         public void AddAssistantMessageByCompletionResult(CompletionResult rusult, bool withReasoning = true, bool withToolCall = true);
         public void AddToolCall(string callId, MessageContent? ret);
     }

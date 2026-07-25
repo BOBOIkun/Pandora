@@ -66,6 +66,7 @@ namespace Pandora.WebSocket.Handler
                     case "rename_session": await HandleRenameSession(msg, conn); break;
                     case "select_session": await HandleSelectSession(msg, conn); break;
                     case "list_sessions": await HandleListSessions(conn); break;
+                    case "list_history_sessions": await HandleListHistorySessions(conn); break;
                     case "send_message": await HandleSendMessage(msg, conn); break;
                     case "get_history": await HandleGetHistory(msg, conn); break;
                     case "get_task": await HandleGetTask(msg, conn); break;
@@ -114,7 +115,7 @@ namespace Pandora.WebSocket.Handler
             // 指定了工作区路径 → 设置
             if (!string.IsNullOrEmpty(msg.Workspace))
             {
-                try { session.AgentEnvironment.SetWorkingDirectory(msg.Workspace); }
+                try { session.AgentEnvironment.SetWorkingDirectory(msg.Workspace,true); }
                 catch (PandoraException) { /* 目录不存在则保持默认 */ }
             }
 
@@ -147,15 +148,13 @@ namespace Pandora.WebSocket.Handler
             var sid = msg.SessionId;
             if (string.IsNullOrEmpty(sid)) return;
 
-            if (_core.Sessions.Remove(sid))
-            {
-                Logger.Instance.Log(LogLevel.Info, $"Session deleted: {sid}");
-                _sessionCts.Remove(sid);
-                if (_connectionSessions.TryGetValue(conn, out var cur) && cur == sid)
-                    _connectionSessions[conn] = null;
-                await conn.SendAsync(WsProtocol.Serialize(WsProtocol.SessionDeleted(sid)));
-                await PushSessionList(conn);
-            }
+            _core.DeleteSession(sid);
+            Logger.Instance.Log(LogLevel.Info, $"Session deleted: {sid}");
+            _sessionCts.Remove(sid);
+            if (_connectionSessions.TryGetValue(conn, out var cur) && cur == sid)
+                _connectionSessions[conn] = null;
+            await conn.SendAsync(WsProtocol.Serialize(WsProtocol.SessionDeleted(sid)));
+            await PushSessionList(conn);
         }
 
         private async Task HandleRenameSession(ClientMessage msg, WsConnection conn)
@@ -180,7 +179,7 @@ namespace Pandora.WebSocket.Handler
 
             try
             {
-                session.AgentEnvironment.SetWorkingDirectory(ws);
+                session.AgentEnvironment.SetWorkingDirectory(ws,true);
                 var newWs = session.AgentEnvironment.WorkingDirectory;
                 await conn.SendAsync(WsProtocol.Serialize(
                     WsProtocol.WorkspaceChanged(sid, newWs)));
@@ -361,22 +360,91 @@ namespace Pandora.WebSocket.Handler
             var sid = msg.SessionId;
             if (string.IsNullOrEmpty(sid)) return;
 
-            if (_core.Sessions.TryGetValue(sid, out var session))
+            if (!_core.Sessions.TryGetValue(sid, out var session))
             {
-                _connectionSessions[conn] = sid;
-                await PushUsage(session, conn);
-                await conn.SendAsync(WsProtocol.Serialize(
-                    WsProtocol.SafetyModeChanged(sid,
-                        session.SafetyManager.SafetyMode.ToString().ToLower())));
-
-                // 推送当前模型信息
-                await conn.SendAsync(WsProtocol.Serialize(
-                    WsProtocol.SessionModelChanged(sid,
-                        session.AiService.ChatModel.ProviderId,
-                        session.AiService.ChatModel.ModelName,
-                        session.AiService.ChatModel.ModelName,
-                        "")));
+                // 尝试从磁盘加载历史会话
+                var info = DataManagerStatic.GetSessionInfoById(sid);
+                if (info == null) return;
+                try
+                {
+                    session = _core.LoadSessionFromDirectory(DataManagerStatic.GetSessionDirectory(sid));
+                }
+                catch (PandoraException)
+                {
+                    return;
+                }
             }
+
+            _connectionSessions[conn] = sid;
+            await PushHistoryForSession(session, conn);
+            await PushUsage(session, conn);
+            await conn.SendAsync(WsProtocol.Serialize(
+                WsProtocol.SafetyModeChanged(sid,
+                    session.SafetyManager.SafetyMode.ToString().ToLower())));
+            await conn.SendAsync(WsProtocol.Serialize(
+                WsProtocol.SessionModelChanged(sid,
+                    session.AiService.ChatModel.ProviderId,
+                    session.AiService.ChatModel.ModelName,
+                    session.AiService.ChatModel.ModelName,
+                    "")));
+        }
+
+        private async Task PushHistoryForSession(ISession session, WsConnection conn)
+        {
+            var messages = session.MessageManager.GetMessages();
+            var history = new List<Protocol.HistoryMessage>();
+
+            foreach (var m in messages)
+            {
+                if (m.Role == "system" || m.Role == "tool") continue;
+
+                var hm = new Protocol.HistoryMessage
+                {
+                    Role = m.Role,
+                    Content = m.Content?.Text
+                };
+                if (m.Role == "user")
+                {
+                    if (m.Content?.Parts?.Count > 0)
+                    {
+                        var textParts = new List<string>();
+                        var imageUrls = new List<string>();
+                        foreach (var part in m.Content.Parts)
+                        {
+                            if (part is TextContentPart textPart && textPart.Text != null)
+                                textParts.Add(textPart.Text);
+                            else if (part is ImageContentPart imgPart)
+                                imageUrls.Add(imgPart.ImageUrl.Url);
+                        }
+                        hm.Content = string.Join("", textParts);
+                        hm.Images = imageUrls.Count > 0 ? imageUrls.ToArray() : null;
+                    }
+                    if (hm.Content != null)
+                    {
+                        hm.Content = Utils.GetSubstringBetween(hm.Content, "<user>", "</user>", hm.Content);
+                    }
+                }
+                if (m.Role == "assistant")
+                {
+                    hm.Reasoning = m.ReasoningContent;
+                    hm.Reasoning ??= m.Extension?.ReasoningExtension;
+                    if (m.ToolCalls?.Count > 0)
+                    {
+                        hm.ToolCalls = m.ToolCalls.Select(tc =>
+                            new Protocol.HistoryToolCall
+                            {
+                                ToolCallId = tc.Id ?? "",
+                                ToolName = tc.FunctionCall?.Name ?? "",
+                                Arguments = tc.FunctionCall?.Arguments,
+                            }).ToArray();
+                    }
+                }
+
+                history.Add(hm);
+            }
+
+            await conn.SendAsync(WsProtocol.Serialize(
+                WsProtocol.History(session.SessionId, history.ToArray())));
         }
 
         private async Task HandleListSessions(WsConnection conn)
@@ -437,7 +505,7 @@ namespace Pandora.WebSocket.Handler
             {
                 userMessage = ChatMessage.FromUser(infoPrefix);
             }
-            session.MessageManager.AddMessage(userMessage);
+            session.MessageManager.AddMessage(userMessage,true);
 
             // 首条消息 → 生成会话标题（防重复触发）
             if (string.IsNullOrEmpty(session.Title) && !string.IsNullOrWhiteSpace(content))
@@ -504,62 +572,7 @@ namespace Pandora.WebSocket.Handler
             if (string.IsNullOrEmpty(sid) || !_core.Sessions.TryGetValue(sid, out var session))
                 return;
 
-            var messages = session.MessageManager.GetMessages();
-            var history = new List<Protocol.HistoryMessage>();
-
-            foreach (var m in messages)
-            {
-                if (m.Role == "system" || m.Role == "tool") continue;
-
-                var hm = new Protocol.HistoryMessage
-                {
-                    Role = m.Role,
-                    Content = m.Content?.Text
-                };
-                if (m.Role == "user")
-                {
-                    // 多模态消息：从 ContentParts 提取文本和图片
-                    if (m.Content?.Parts?.Count > 0)
-                    {
-                        var textParts = new List<string>();
-                        var imageUrls = new List<string>();
-                        foreach (var part in m.Content.Parts)
-                        {
-                            if (part is TextContentPart textPart && textPart.Text != null)
-                                textParts.Add(textPart.Text);
-                            else if (part is ImageContentPart imagePart && imagePart.ImageUrl?.Url != null)
-                                imageUrls.Add(imagePart.ImageUrl.Url);
-                        }
-                        hm.Content = Utils.GetSubstringBetween(string.Join("", textParts), "<user>", "</user>");
-                        if (imageUrls.Count > 0)
-                            hm.Images = [.. imageUrls];
-                    }
-                    else
-                    {
-                        hm.Content = Utils.GetSubstringBetween(hm.Content ?? "", "<user>", "</user>", hm.Content ?? "");
-                    }
-                }
-                if (m.Role == "assistant")
-                {
-                    hm.Reasoning = m.ReasoningContent;
-                    hm.Reasoning ??= m.Extension?.ReasoningExtension;
-                    if (m.ToolCalls?.Count > 0)
-                    {
-                        hm.ToolCalls = m.ToolCalls.Select(tc =>
-                            new Protocol.HistoryToolCall
-                            {
-                                ToolCallId = tc.Id ?? "",
-                                ToolName = tc.FunctionCall?.Name ?? "",
-                                Arguments = tc.FunctionCall?.Arguments,
-                            }).ToArray();
-                    }
-                }
-
-                history.Add(hm);
-            }
-
-            await conn.SendAsync(WsProtocol.Serialize(
-                WsProtocol.History(sid, [.. history])));
+            await PushHistoryForSession(session, conn);
         }
 
         // ============ Task ============
@@ -825,6 +838,24 @@ namespace Pandora.WebSocket.Handler
             {
                 lock (_titleLock) _titleGenerating.Remove(session.SessionId);
             }
+        }
+
+        private async Task HandleListHistorySessions(WsConnection conn)
+        {
+            var infos = DataManagerStatic.GetSessionsInfo();
+            var sorted = infos
+                .OrderByDescending(i => i.GetLastUpdateTime())
+                .Select(i => new SessionSummary
+                {
+                    SessionId = i.SessionId,
+                    Title = i.Title ?? "新建对话",
+                    Workspace = i.WorkingDirectory,
+                    LastActive = DateTime.FromFileTimeUtc(i.GetLastUpdateTime()).ToString("yyyy-MM-dd HH:mm"),
+                })
+                .ToArray();
+
+            await conn.SendAsync(WsProtocol.Serialize(
+                WsProtocol.HistorySessionList(sorted)));
         }
 
         private async Task PushSessionList(WsConnection conn)

@@ -8,6 +8,7 @@ namespace Pandora.Agent
 {
     public class UsageManager : IUsageManager
     {
+        private readonly ISession _session; 
         public int CachedTokens {  get; private set; }
         public int ReasoningTokens { get; private set; }
         public int TotalTokens { get; private set; }
@@ -16,8 +17,11 @@ namespace Pandora.Agent
         public int RoundCount { get; private set; }
         public double CacheHitRate =>
             PromptTokens > 0 ? (double)CachedTokens / PromptTokens : 0;
-
-        public void Accumulate(Usage? usage)
+        public UsageManager(ISession session)
+        {
+            _session = session;
+        }
+        public void Accumulate(Usage? usage, bool flush =false)
         {
             if (usage == null) return;
             TotalTokens += usage.TotalTokens;
@@ -26,6 +30,10 @@ namespace Pandora.Agent
             CachedTokens += usage.PromptTokensDetails?.CachedTokens ?? 0;
             ReasoningTokens += usage.CompletionTokensDetails?.ReasoningTokens ?? 0;
             RoundCount++;
+            if (flush)
+            {
+                _session.DataManager.SetUsage(usage);
+            }
         }
     }
 }

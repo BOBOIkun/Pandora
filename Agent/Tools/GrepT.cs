@@ -80,7 +80,7 @@ namespace Pandora.Agent.Tools
         }
         public void Init(ISession session)
         {
-            string rgPath = Path.Combine(session.AgentEnvironment.BinDirectory, "rg.exe");
+            string rgPath = Path.Combine(AgentEnvironment.GetBinDirectory(), "rg.exe");
             if (!File.Exists(rgPath))
             {
                 throw new PandoraException("GlobT rg.exe not found");

@@ -150,6 +150,12 @@ namespace Pandora.WebSocket.Protocol
             sessions
         };
 
+        public static object HistorySessionList(SessionSummary[] sessions) => new
+        {
+            type = "history_session_list",
+            sessions
+        };
+
         // ============ Messages / Streaming ============
 
         public static object AssistantMessageStart(string sessionId, string messageId) => new

@@ -24,6 +24,40 @@ namespace Pandora.Agent
             }
             return session;
         }
+
+        public void DeleteSession(string sessionId)
+        {
+            if (Sessions.TryGetValue(sessionId, out var session) && session != null)
+            {
+                session.DataManager.DeleteSession();
+                Sessions.Remove(sessionId);
+            }
+        }
+
+        public ISession LoadSessionFromDirectory(string directoryPath)
+        {
+            if (!Directory.Exists(directoryPath))
+            {
+                throw new PandoraException($"Directory {directoryPath} not found.");
+            }
+            string file = DataManagerStatic.GetSessionInfoPathFromDir(directoryPath);
+            if (!File.Exists(file))
+            {
+                throw new PandoraException($"Directory {directoryPath} not a valid session directory.");
+            }
+            SessionInfo? sessionInfo = DataManagerStatic.GetSessionInfoByFile(file);
+            if (sessionInfo!= null)
+            {
+                ISession session = new Session(this,sessionInfo);
+                if (!Sessions.TryAdd(sessionInfo.SessionId,session))
+                {
+                    throw new PandoraException($"Session {sessionInfo.SessionId} already exists");
+                }
+                return session;
+            }
+            throw new PandoraException("Invalid session info");
+        }
+
         public Core()
         {
             ConfigManager = new ConfigManager();
