@@ -251,7 +251,7 @@ namespace Pandora.Agent
             var ret = (await _client.Chat.CompleteAsync(request));
             var t = ret.Choices.FirstOrDefault();
             if (t == null || t.Message==null)
-                    return new CompletionResult("", "", [],null, new PandoraException("No message returned"));
+                    return new CompletionResult("", "", [],null, new PandoraException(ErrorCode.Internal));
             if (t.Message.ToolCalls != null)
             {
                 foreach (var toolCall in t.Message.ToolCalls)

@@ -23,7 +23,7 @@ namespace Pandora.Agent
         {
             if (!Directory.Exists(workingDirectory))
             {
-                throw new PandoraException($"Working directory {workingDirectory} not found.");
+                throw new PandoraException(ErrorCode.WorkingDirectoryNotFound, errorData: new { workingDirectory });
             }
             WorkingDirectory = workingDirectory;
             if(flush) _session.DataManager.SetWorkingDirectory(workingDirectory);

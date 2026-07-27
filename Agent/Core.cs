@@ -1,6 +1,7 @@
 using Pandora.Interfaces;
 using Pandora.Network;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text;
 
@@ -8,7 +9,7 @@ namespace Pandora.Agent
 {
     public class Core: ICore
     {
-        public Dictionary<string, ISession> Sessions {get;}= [];
+        public ConcurrentDictionary<string, ISession> Sessions {get;}= [];
         public PandoraHttpClientFactory HttpClientFactory {get;}
         public PandoraHttpClientFactory HttpClientFactoryProxy {get;}
         public ProviderManager ProviderManager {get; private set;}
@@ -20,7 +21,7 @@ namespace Pandora.Agent
             var session = new Session(this,sessionId, workMode);
             if (!Sessions.TryAdd(sessionId,session))
             {
-                throw new PandoraException($"Session {sessionId} already exists");
+                throw new PandoraException(ErrorCode.SessionAlreadyExists, errorData: new { sessionId });
             }
             return session;
         }
@@ -30,7 +31,7 @@ namespace Pandora.Agent
             if (Sessions.TryGetValue(sessionId, out var session) && session != null)
             {
                 session.DataManager.DeleteSession();
-                Sessions.Remove(sessionId);
+                Sessions.Remove(sessionId,out _);
             }
         }
 
@@ -38,12 +39,12 @@ namespace Pandora.Agent
         {
             if (!Directory.Exists(directoryPath))
             {
-                throw new PandoraException($"Directory {directoryPath} not found.");
+                throw new PandoraException(ErrorCode.SessionDirectoryNotFound, errorData: new { directoryPath });
             }
             string file = DataManagerStatic.GetSessionInfoPathFromDir(directoryPath);
             if (!File.Exists(file))
             {
-                throw new PandoraException($"Directory {directoryPath} not a valid session directory.");
+                throw new PandoraException(ErrorCode.InvalidSessionDirectory, errorData: new { directoryPath });
             }
             SessionInfo? sessionInfo = DataManagerStatic.GetSessionInfoByFile(file);
             if (sessionInfo!= null)
@@ -51,11 +52,11 @@ namespace Pandora.Agent
                 ISession session = new Session(this,sessionInfo);
                 if (!Sessions.TryAdd(sessionInfo.SessionId,session))
                 {
-                    throw new PandoraException($"Session {sessionInfo.SessionId} already exists");
+                    throw new PandoraException(ErrorCode.SessionAlreadyExists, errorData: new { sessionId = sessionInfo.SessionId });
                 }
                 return session;
             }
-            throw new PandoraException("Invalid session info");
+            throw new PandoraException(ErrorCode.InvalidSessionInfo);
         }
 
         public Core()

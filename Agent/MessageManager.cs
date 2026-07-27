@@ -66,7 +66,7 @@ namespace Pandora.Agent
             string promptFilePath = Path.Combine(filePath, promptFileName);
             if (!File.Exists(promptFilePath))
             {
-                throw new PandoraException ($"Prompt file {promptFileName} not found.");
+                throw new PandoraException(ErrorCode.PromptFileNotFound, errorData: new { promptFileName });
             }
             return File.ReadAllText(promptFilePath);
         }
@@ -95,6 +95,55 @@ namespace Pandora.Agent
         public void AddToolCall(string toolCallId, MessageContent? ret)
         {
             AddMessage(ChatMessage.FromTool(ret, toolCallId));
+        }
+
+        public void CompressContext(CompressOption option)
+        {
+            HashSet<string> id = new HashSet<string>();
+            List<ChatMessage> messages = [.. _messages];
+            _messages.Clear();
+            int oldMesCount=0;
+            if (option.RemoveFileReadMessages)
+            {
+                _session.TextFileState.Clear();
+            }
+            foreach (var item in messages)
+            {
+                if (option.RemoveOldMessagesCount>oldMesCount)
+                {
+                    oldMesCount++;
+                    continue;
+                }
+                if ((!option.RemoveFileReadMessages && !option.RemoveBashCommandMessages) || item.ToolCalls==null)
+                {
+                    _messages.Add(item);
+                    continue;
+                }
+                if (item.Role == "tool" && item.ToolCallId!=null && id.Contains(item.ToolCallId))
+                {
+                    item.Content = new("Cleared");
+                    continue;
+                }
+                foreach (var item1 in item.ToolCalls)
+                {
+                    if (item1.FunctionCall==null)
+                    {
+                        continue;
+                    }
+                    if (option.RemoveBashCommandMessages && item1.FunctionCall.Name== "bash" && item1.Id!=null)
+                    {
+                        item1.FunctionCall.Arguments = "";
+                        id.Add(item1.Id);
+                        continue;
+                    }
+                    if (option.RemoveFileReadMessages && item1.FunctionCall.Name == "read_file" && item1.Id != null)
+                    {
+                        item1.FunctionCall.Arguments = "";
+                        id.Add(item1.Id);
+                        continue;
+                    }
+                }
+            }
         }
     }
 }

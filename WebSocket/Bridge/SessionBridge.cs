@@ -31,7 +31,7 @@ namespace Pandora.WebSocket.Bridge
             _session.EventBus.Subscribe<ReasoningEndEvent>(OnReasoningEnd);
             _session.EventBus.Subscribe<ContentEndEvent>(OnContentEnd);
             _session.EventBus.Subscribe<ToolCallEndEvent>(OnToolCallEnd);
-            _session.EventBus.Subscribe<AgentErrorEvent>(OnError);
+            _session.EventBus.Subscribe<AgentInfoEvent>(OnInfo);
             _session.EventBus.Subscribe<AgentUsageChangedEvent>(OnUsageChanged);
             _session.EventBus.Subscribe<FileAccessConfirmEvent, bool>(OnFileAccessConfirm);
             _session.EventBus.Subscribe<BashConfirmEvent, bool>(OnBashConfirm);
@@ -125,11 +125,11 @@ namespace Pandora.WebSocket.Bridge
                         e.Arguments, e.Success)));
         }
 
-        private void OnError(AgentErrorEvent e)
+        private void OnInfo(AgentInfoEvent e)
         {
             _conn.SendFireAndForget(
                 Protocol.WsProtocol.Serialize(
-                    Protocol.WsProtocol.Error(e.SessionId, e.Message)));
+                    Protocol.WsProtocol.Info(e.SessionId, e.Message)));
         }
 
         private void OnUsageChanged(AgentUsageChangedEvent e)
@@ -139,7 +139,7 @@ namespace Pandora.WebSocket.Bridge
                     Protocol.WsProtocol.UsageUpdate(
                         e.SessionId, e.PromptTokens, e.CompletionTokens,
                         e.TotalTokens, e.CachedTokens, e.ReasoningTokens,
-                        e.RoundCount, e.CacheHitRate)));
+                        e.RoundCount, e.CacheHitRate, e.ContextLength)));
         }
 
         private void OnSessionTitleChanged(SessionTitleChangedEvent e)

@@ -1,3 +1,4 @@
+using OpenAI;
 using OpenAI.Models.Chat;
 using Pandora.Event;
 using Pandora.Interfaces;
@@ -14,7 +15,7 @@ namespace Pandora.Agent
     public class Session : ISession
     {
         public string SessionId { get; private set; }
-        public string Title { get; set; } = "新对话";
+        public string Title { get; set; } = "";
         public ICore Core { get; private set; }
         public WorkMode WorkMode { get; private set; }
         public IMessageManager MessageManager { get; private set; }
@@ -42,7 +43,7 @@ namespace Pandora.Agent
             };
             WorkMode = info.WorkMode;
             SessionId = info.SessionId;
-            Title = info.Title?? "新对话";
+            Title = info.Title?? "";
             AgentToolManager = new AgentToolManager(this);
             AgentToolManager.LoadTools();
             if (info.ToolFullLoad != null) AgentToolManager.FullLoadTool(info.ToolFullLoad);
@@ -80,11 +81,67 @@ namespace Pandora.Agent
             AgentToolManager = new AgentToolManager(this);
             AgentToolManager.LoadTools();
             AiService = new AiService(this, Core.ProviderManager);
-            AiService.LoadDefaultModel(true);            MessageManager = new MessageManager(this);
+            AiService.LoadDefaultModel(true);
+            MessageManager = new MessageManager(this);
             AgentEnvironment.SetWorkingDirectory(AgentEnvironment.WorkingDirectory,true);
         }
-        public async Task CompleteChat(CompleteChatOptions options, CancellationToken cancellationToken)
+        
+        public async Task CompleteChatBackOff(CompleteChatOptions options, CancellationToken cancellationToken, BackOffOptions backOffOptions)
         {
+            int attempt=0;
+            while (!cancellationToken.IsCancellationRequested) 
+            {
+                attempt++;
+                if (attempt > backOffOptions.MaxAttemptCount)
+                {
+                    throw new PandoraException(ErrorCode.RetryExhausted, errorData: new { Attempts = backOffOptions.MaxAttemptCount });
+                }
+                CompleteChatResult ret;
+                try
+                {
+                    ret=await CompleteChat(options, cancellationToken);
+                    if (ret.AiServiceException != null)
+                    {
+                        throw ret.AiServiceException;
+                    }
+                    return;
+                }
+                catch (ApiException a) 
+                {
+                    if (Utils.OpenAIIsStopStatusCode(a.StatusCode))
+                    {
+                        return;
+                    }
+                    int delay = a.RetryAfter != -1
+                        ? a.RetryAfter + (int)backOffOptions.BaseTime.TotalMilliseconds / 2
+                        : (int)backOffOptions.BaseTime.TotalMilliseconds + (int)Math.Pow(2, attempt) * 1000;
+                    await DelayAndPublish(delay, cancellationToken);
+                    Logger.Instance.Log(LogLevel.Warning, $"API Retry after {a.RetryAfter} ms, attempt={attempt}");
+                    continue;
+                }
+                catch (JsonException)
+                {
+                    return;
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+                catch (Exception)
+                {
+                    await DelayAndPublish((int)backOffOptions.BaseTime.TotalMilliseconds + (int)Math.Pow(2, attempt) * 1000, cancellationToken);
+                    continue;
+                }
+            }
+        }
+        private async Task DelayAndPublish(int ms,CancellationToken token)
+        {
+            EventBus.Publish(new AgentInfoEvent { Message = $"重试中，等待 {(ms / 1000.0):F1} 秒...", SessionId = SessionId });
+            await Task.Delay(ms, token);
+        }
+        public async Task<CompleteChatResult> CompleteChat(CompleteChatOptions options, CancellationToken cancellationToken)
+        {
+            CompleteChatResult result = new();
             await TextFileState.FindcChangedFiles();
             uint toolUse = 0;
             uint toolError = 0;
@@ -105,7 +162,7 @@ namespace Pandora.Agent
                 ret = await AiService.StreamCompletionAsync(request, cancellationToken);
                 if (ret.Exception != null)
                 {
-                    EventBus.Publish(new AgentErrorEvent { Message = ret.Exception.Message, SessionId = SessionId });
+                    result.AiServiceException = ret.Exception;
                     break;
                 }
                 EventBus.Publish(new ContentEndEvent { SessionId = SessionId, FullContent = ret.Content });
@@ -119,6 +176,7 @@ namespace Pandora.Agent
                     TotalTokens = UsageManager.TotalTokens,
                     PromptTokens = UsageManager.PromptTokens,
                     CompletionTokens = UsageManager.CompletionTokens,
+                    ContextLength = UsageManager.ContextLength,
                     RoundCount = UsageManager.RoundCount,
                     CacheHitRate = UsageManager.CacheHitRate
                 });
@@ -127,10 +185,10 @@ namespace Pandora.Agent
                 for (int i = 0; i < ret.ToolsCalls.Count; i++)
                 {
                     if (toolError >= options.MaxToolError)
-                        throw new PandoraException("Too Many Tools Error");
+                        throw new PandoraException(ErrorCode.TooManyToolErrors);
 
                     if (toolUse >= options.MaxToolsUse)
-                        throw new PandoraException("Too Many Tools Use");
+                        throw new PandoraException(ErrorCode.TooManyToolUses);
                     var toolCall = ToolUse(ret.ToolsCalls[i].ToolName, ret.ToolsCalls[i].Parameters);
                     bool success = toolCall.retSatus == ToolsResult.Success;
                     EventBus.Publish(new ToolCallEndEvent
@@ -157,11 +215,12 @@ namespace Pandora.Agent
                     else if (toolCall.retSatus == ToolsResult.UnKnownError)
                     {
                         Logger.Instance.Log(LogLevel.Error, $"Tool Use Error: {ret.ToolsCalls[i].ToolName} return {toolCall.ret?.Text}",nameof(CompleteChat));
-                        throw new Exception("Tool Use Error");
+                        throw new PandoraException(ErrorCode.ToolUseError, errorData: new { ToolName = ret.ToolsCalls[i].ToolName });
                     }
                 }
                 TextFileState.Locked = false;
             }
+            return result;
         }
         public (MessageContent? ret, ToolsResult retSatus) ToolUse(string toolName, string parameters)
         {

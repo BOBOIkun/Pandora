@@ -22,7 +22,7 @@ namespace Pandora.Models
         public string? ToolName { get; set; }
         public IList<JsonFieldChunk>? Arguments { get; set; }
     }
-    public class AgentErrorEvent : EventBase
+    public class AgentInfoEvent : EventBase
     {
         public required string Message { get; set; }
     }
@@ -33,6 +33,7 @@ namespace Pandora.Models
         public int TotalTokens { get;  set; }
         public int PromptTokens { get;  set; }
         public int CompletionTokens { get;  set; }
+        public int ContextLength { get; set; }
         public int RoundCount { get;  set; }
         public double CacheHitRate { get; set; }
     }

@@ -68,6 +68,15 @@ namespace Pandora.WebSocket.Protocol
 
         [JsonPropertyName("asr")]
         public JsonElement? Asr { get; set; }
+
+        [JsonPropertyName("removeCount")]
+        public int? RemoveCount { get; set; }
+
+        [JsonPropertyName("removeFileRead")]
+        public bool? RemoveFileRead { get; set; }
+
+        [JsonPropertyName("removeBash")]
+        public bool? RemoveBash { get; set; }
     }
 
     // ============ 工具函数 ============
@@ -240,7 +249,8 @@ namespace Pandora.WebSocket.Protocol
         // ============ Usage ============
 
         public static object UsageUpdate(string sessionId, int promptTokens, int completionTokens,
-            int totalTokens, int cachedTokens, int reasoningTokens, int roundCount, double cacheHitRate) => new
+            int totalTokens, int cachedTokens, int reasoningTokens, int roundCount, double cacheHitRate,
+            int contextLength) => new
         {
             type = "usage_update",
             sessionId,
@@ -250,7 +260,8 @@ namespace Pandora.WebSocket.Protocol
             cachedTokens,
             reasoningTokens,
             roundCount,
-            cacheHitRate
+            cacheHitRate,
+            contextLength
         };
 
         // ============ History ============
@@ -336,6 +347,13 @@ namespace Pandora.WebSocket.Protocol
         public static object Error(string? sessionId, string message) => new
         {
             type = "error",
+            sessionId,
+            message
+        };
+
+        public static object Info(string? sessionId, string message) => new
+        {
+            type = "info",
             sessionId,
             message
         };

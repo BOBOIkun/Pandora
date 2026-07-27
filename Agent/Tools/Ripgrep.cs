@@ -24,7 +24,7 @@ namespace Pandora.Agent.Tools
         {
             if (!File.Exists(rgPath))
             {
-                throw new PandoraException("Ripgrep rg.exe not found");
+                throw new PandoraException(ErrorCode.RipgrepNotFound);
             }
             _rgPath = rgPath;
         }

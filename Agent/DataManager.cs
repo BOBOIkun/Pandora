@@ -43,7 +43,7 @@ namespace Pandora.Agent
                 p2 = GetMessageFilePath(info.SessionId, info.MessageFiles[i]);
                 if (!File.Exists(p2))
                 {
-                    throw new PandoraException($"Invalid message file: {p2}");
+                    throw new PandoraException(ErrorCode.InvalidMessageFile, errorData: new { file = p2 });
                 }
                 using ReverseLineReader reverseLineReader=new(p2);
                 while (!reverseLineReader.End)
@@ -65,7 +65,7 @@ namespace Pandora.Agent
                     catch (Exception ex)
                     {
                         Logger.Instance.Log(LogLevel.Error, $"[Pandora] Invalid message: {ex.Message}");
-                        throw new PandoraException($"[Pandora] Invalid message: {ex.Message}");
+                        throw new PandoraException(ErrorCode.InvalidMessageJson, errorData: new { error = ex.Message });
                     }
                 }
             }
@@ -167,7 +167,7 @@ namespace Pandora.Agent
         }
         private void Read()
         {
-            SessionInfo? t = JsonSerializer.Deserialize<SessionInfo>(File.ReadAllText(DataManagerStatic.GetSessionInfoPathFromDir(_path), Encoding.UTF8)) ?? throw new PandoraException("Invalid session info");
+            SessionInfo? t = JsonSerializer.Deserialize<SessionInfo>(File.ReadAllText(DataManagerStatic.GetSessionInfoPathFromDir(_path), Encoding.UTF8)) ?? throw new PandoraException(ErrorCode.InvalidSessionInfo);
             _sessionInfo = t;
         }
         public async Task AppendMessageAsync(ChatMessage msg)

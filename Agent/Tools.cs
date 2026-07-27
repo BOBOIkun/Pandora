@@ -128,6 +128,10 @@ namespace Pandora.Agent
 
     public class Utils
     {
+        public static bool OpenAIIsStopStatusCode(int statusCode)
+        {
+            return (statusCode == 400 || statusCode == 401 || statusCode == 402 || statusCode == 422);
+        }
         public static string GetFullPath(string spath,IAgentEnvironment agentEnvironment)
         {
             return Path.GetFullPath(Path.Combine(agentEnvironment.WorkingDirectory, spath)); ;

@@ -1,4 +1,4 @@
-﻿using OpenAI.Models.Chat;
+using OpenAI.Models.Chat;
 using OpenAI.Models.Shared;
 using Pandora.Agent;
 using System;

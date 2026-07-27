@@ -24,6 +24,11 @@ namespace Pandora.Agent
                 info.lockTime = time;
             }
         }
+        public void Clear()
+        {
+            _changedFiles.Clear();
+            _fileState.Clear();
+        }
         public string GetChangedFilesStr(bool clear = false)
         {
             string str = string.Join("\n", _changedFiles.Select(x => x.Value switch

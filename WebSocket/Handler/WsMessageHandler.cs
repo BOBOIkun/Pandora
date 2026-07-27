@@ -67,6 +67,7 @@ namespace Pandora.WebSocket.Handler
                     case "select_session": await HandleSelectSession(msg, conn); break;
                     case "list_sessions": await HandleListSessions(conn); break;
                     case "list_history_sessions": await HandleListHistorySessions(conn); break;
+                    case "compress_context": await HandleCompressContext(msg, conn); break;
                     case "send_message": await HandleSendMessage(msg, conn); break;
                     case "get_history": await HandleGetHistory(msg, conn); break;
                     case "get_task": await HandleGetTask(msg, conn); break;
@@ -188,7 +189,7 @@ namespace Pandora.WebSocket.Handler
             catch (PandoraException ex)
             {
                 await conn.SendAsync(WsProtocol.Serialize(
-                    WsProtocol.Error(sid, ex.Message)));
+                    WsProtocol.Error(sid, FormatError(ex))));
             }
         }
 
@@ -529,7 +530,8 @@ namespace Pandora.WebSocket.Handler
 
             try
             {
-                await session.CompleteChat(new CompleteChatOptions(), cts.Token);
+                var backoff = new BackOffOptions { BaseTime = TimeSpan.FromSeconds(2), MaxAttemptCount = 8 };
+                await session.CompleteChatBackOff(new CompleteChatOptions(), cts.Token, backoff);
                 if (string.IsNullOrEmpty(session.Title))
                 {
                     bool shouldGenerate;
@@ -550,7 +552,7 @@ namespace Pandora.WebSocket.Handler
             catch (PandoraException ex)
             {
                 await conn.SendAsync(WsProtocol.Serialize(
-                    WsProtocol.Error(sid, ex.Message)));
+                    WsProtocol.Error(sid, FormatError(ex))));
             }
             catch (Exception ex)
             {
@@ -559,6 +561,8 @@ namespace Pandora.WebSocket.Handler
             }
             finally
             {
+                await conn.SendAsync(WsProtocol.Serialize(
+                    WsProtocol.ContentEnd(sid, "")));
                 bridge.Unsubscribe();
                 _sessionCts.Remove(sid);
             }
@@ -840,10 +844,30 @@ namespace Pandora.WebSocket.Handler
             }
         }
 
+        private async Task HandleCompressContext(ClientMessage msg, WsConnection conn)
+        {
+            var sid = msg.SessionId;
+            if (string.IsNullOrEmpty(sid) || !_core.Sessions.TryGetValue(sid, out var session))
+                return;
+
+            var option = new CompressOption();
+            if (msg.RemoveCount.HasValue && msg.RemoveCount.Value >= 0)
+                option.RemoveOldMessagesCount = msg.RemoveCount.Value;
+            if (msg.RemoveFileRead.HasValue)
+                option.RemoveFileReadMessages = msg.RemoveFileRead.Value;
+            if (msg.RemoveBash.HasValue)
+                option.RemoveBashCommandMessages = msg.RemoveBash.Value;
+
+            session.MessageManager.CompressContext(option);
+            await PushUsage(session, conn);
+            await PushHistoryForSession(session, conn);
+        }
+
         private async Task HandleListHistorySessions(WsConnection conn)
         {
             var infos = DataManagerStatic.GetSessionsInfo();
             var sorted = infos
+                .Where(i => !_core.Sessions.ContainsKey(i.SessionId))
                 .OrderByDescending(i => i.GetLastUpdateTime())
                 .Select(i => new SessionSummary
                 {
@@ -881,7 +905,33 @@ namespace Pandora.WebSocket.Handler
                     session.SessionId,
                     u.PromptTokens, u.CompletionTokens, u.TotalTokens,
                     u.CachedTokens, u.ReasoningTokens,
-                    u.RoundCount, u.CacheHitRate)));
+                    u.RoundCount, u.CacheHitRate, u.ContextLength)));
+        }
+
+        private static string FormatError(PandoraException ex) => ex.Code switch
+        {
+            ErrorCode.RetryExhausted => $"重试 {GetErrorData(ex, "Attempts", 0)} 次后仍未成功，对话终止",
+            ErrorCode.SessionDirectoryNotFound => "会话目录不存在",
+            ErrorCode.InvalidSessionDirectory => "无效的会话目录",
+            ErrorCode.InvalidSessionInfo => "会话数据已损坏",
+            ErrorCode.InvalidMessageFile => "消息文件无效",
+            ErrorCode.InvalidMessageJson => "消息格式错误",
+            ErrorCode.ToolNotFound => $"工具 {GetErrorData(ex, "toolName", "")} 未找到",
+            ErrorCode.TooManyToolErrors => "工具错误次数过多，对话终止",
+            ErrorCode.TooManyToolUses => "工具调用次数过多，对话终止",
+            ErrorCode.ToolUseError => $"工具 {GetErrorData(ex, "ToolName", "")} 调用出错，对话终止",
+            ErrorCode.WorkingDirectoryNotFound => "工作目录不存在",
+            ErrorCode.PromptFileNotFound => "提示词文件未找到",
+            ErrorCode.RipgrepNotFound => "ripgrep 未找到",
+            ErrorCode.GrepNotFound => "rg.exe 未找到",
+            _ => ex.Message,
+        };
+
+        private static T GetErrorData<T>(PandoraException ex, string key, T defaultValue)
+        {
+            if (ex.ErrorData is IDictionary<string, object> dict && dict.TryGetValue(key, out var val) && val is T t)
+                return t;
+            return defaultValue;
         }
     }
 }

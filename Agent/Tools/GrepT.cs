@@ -83,7 +83,7 @@ namespace Pandora.Agent.Tools
             string rgPath = Path.Combine(AgentEnvironment.GetBinDirectory(), "rg.exe");
             if (!File.Exists(rgPath))
             {
-                throw new PandoraException("GlobT rg.exe not found");
+                throw new PandoraException(ErrorCode.GrepNotFound);
             }
             _ripgrep = new Ripgrep(rgPath);
         }

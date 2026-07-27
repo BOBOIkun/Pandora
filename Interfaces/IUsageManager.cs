@@ -14,6 +14,7 @@ namespace Pandora.Interfaces
         public int CompletionTokens { get; }
         public int RoundCount { get;}
         public double CacheHitRate { get; }
+        public int ContextLength { get;}
         public void Accumulate(Usage? usage,bool flush =false);
     }
 }

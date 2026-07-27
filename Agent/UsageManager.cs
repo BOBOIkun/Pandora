@@ -15,6 +15,7 @@ namespace Pandora.Agent
         public int PromptTokens { get; private set; }
         public int CompletionTokens { get; private set; }
         public int RoundCount { get; private set; }
+        public int ContextLength { get; private set; }
         public double CacheHitRate =>
             PromptTokens > 0 ? (double)CachedTokens / PromptTokens : 0;
         public UsageManager(ISession session)
@@ -24,6 +25,7 @@ namespace Pandora.Agent
         public void Accumulate(Usage? usage, bool flush =false)
         {
             if (usage == null) return;
+            ContextLength= usage.PromptTokens;
             TotalTokens += usage.TotalTokens;
             PromptTokens += usage.PromptTokens;
             CompletionTokens += usage.CompletionTokens;

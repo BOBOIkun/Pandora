@@ -37,7 +37,7 @@ namespace Pandora.Agent
                 tool.FullLoad=true;
             }else
             {
-                throw new PandoraException($"tool {toolName} not found");
+                throw new PandoraException(ErrorCode.ToolNotFound, errorData: new { toolName });
             }
             if (flush)
             {

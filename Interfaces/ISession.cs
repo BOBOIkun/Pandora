@@ -25,7 +25,17 @@ namespace Pandora.Interfaces
         public IAiService AiService { get;}
         public FileState TextFileState { get; }
         public SessionChangeInfo ChangeInfo { get; }
-        public Task CompleteChat(CompleteChatOptions options, CancellationToken cancellationToken);
+        public Task<CompleteChatResult> CompleteChat(CompleteChatOptions options, CancellationToken cancellationToken);
+        public Task CompleteChatBackOff(CompleteChatOptions options, CancellationToken cancellationToken, BackOffOptions backOffOptions);
+    }
+    public class CompleteChatResult
+    {
+        public Exception? AiServiceException { get; set; }
+    }
+    public class BackOffOptions
+    {
+        public TimeSpan BaseTime { get; set; } = TimeSpan.FromMilliseconds(2000);
+        public int MaxAttemptCount { get; set; } = 8;
     }
     [Flags]
     public enum WorkMode
